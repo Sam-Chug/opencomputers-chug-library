@@ -9,6 +9,7 @@ As for what does exist, here is a quick rundown:
 ## Chugraph
 Chugraph is my solution to a terribly slow GPU, and a slightly less terribly slow buffer.
 Its also terrible to read through. I really hate lua and I really love premature optimization.
+
 Its also a tad memory-hungry. I've done all the insane memory saving I could think of, and it still eats up around 300kb of ram when doing absolutely nothing.
 But this is because all drawing is first entered into an array holding data for the entire screen. This speeds up the drawing process dramatically, so Chugraph can eat all the memory it wants.
 That being said, further optimization is a constant goal.

@@ -31,7 +31,7 @@ As for non-native functions, there are quite a few:
 
 Useful command line args:
 
--d starts demo mode, only shows debug stats. use with either -w or -c to show some 
+-d starts demo mode, only shows debug stats. use with either -w or -c to show some stuff
 
 -w (epilepsy warning) continuously draws 350 randomly placed white lines per frame, works as a stress test for two-color rendering situations
 

@@ -30,8 +30,11 @@ As for non-native functions, there are quite a few:
 - FillTriangle() fills a triangle between three points
 
 Useful command line args:
+
 -d starts demo mode, only shows debug stats. use with either -w or -c to show some 
+
 -w (epilepsy warning) continuously draws 350 randomly placed white lines per frame, works as a stress test for two-color rendering situations
+
 -c (epilepsy warning, seriously) continuously draws 350 randomly placed RGB + CMY + White lines per frame, works as a stress test for essentially random noise for extremely taxing rendering situations
 
 There are many more features coming down the pipeline, including a very performant .obj renderer, the code of which is equally if not even more challenging to parse!

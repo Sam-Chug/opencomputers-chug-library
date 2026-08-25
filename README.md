@@ -37,7 +37,20 @@ Useful command line args:
 
 -c (epilepsy warning, seriously) continuously draws 350 randomly placed RGB + CMY + White lines per frame, works as a stress test for essentially random noise for extremely taxing rendering situations
 
-There are many more features coming down the pipeline, including a very performant .obj renderer, the code of which is equally if not even more challenging to parse!
+
+The debug panel shows a few helpful stats that may aid in your own optimization efforts. To fit into a reasonably-sized area, I have shortened the names of many the variables. The extended versions are as follows:
+- SET: How many times gpu.set() was called in the previous frame
+- FILL: How many times gpu.fill() was called in the previous frame
+- PACK: How many times string.pack() was called in the previous frame (a pixel's data is packed into a string when changed, to save on memory)(this has become more trouble than it's worth though)
+- SFORE: How many times gpu.setForeground() was called in the previous frame
+- SBACK: How many times gpu.setBackground() was called in the previous frame
+- INVR: How many times a compiled draw string was inverted in the previous frame, to save on having to swap foreground and background colors
+- CPU: How long the CPU was active in the previous frame, also shows a rolling average of the previous 200 frames
+- GPU: I thought I could do the same for the gpu. I guess not. This does nothing at the moment.
+- FRAME: How long its been since the last frame was displayed on screen. This will usually hover around multiples of 50ms, as that is the length of a tick. The rolling average gives you a better idea of how close you are to breaking into the next framerate milestone.
+- MEM: The amount of memory used in the last frame. Pretty unreadable, I suggest looking at the rolling average.
+
+There are many more features working their way down the pipeline, including a very performant .obj renderer, the code of which is equally if not even more challenging to parse!
 Proper documentation for Chugraph will come sometime in the future.
 
 ## Chugkey

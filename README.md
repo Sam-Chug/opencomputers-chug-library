@@ -72,7 +72,7 @@ The codebase for this originated from a tutorial by Javidx9 on YouTube (https://
 
 **Chug3D requires both Chugkey and Chuggraph to run**
 
-At the moment, loading .obj files with some command line arguments is **all** this does. It may be expanded into something more in the future, but that mostly depends on how much more I can optimize.
+At the moment, loading .obj files with some command line arguments is _**all**_ this does. It may be expanded into something more in the future, but that mostly depends on how much more I can optimize.
 
 **USAGE**
 - Move an .obj file into the same folder as Chug3D

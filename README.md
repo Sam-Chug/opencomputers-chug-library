@@ -95,6 +95,7 @@ You can translate around the scene using WASD and rotate using arrow keys. That'
 - -w Renders the wireframe over the rasterized triangles
 
 **PERFORMANCE**
+
 I am quite proud of how far this project has come performance-wise, its almost 4x faster than when I finished the tutorial the original code was based on.
 
 That performance came at the cost of readability though, and I apologize if you were looking towards this code for some form of guidance. I'm not that great of a coder anyways, actually I'm pretty bad.

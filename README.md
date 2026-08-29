@@ -82,6 +82,7 @@ At the moment, loading .obj files with some command line arguments is _**all**_ 
 - Also, this only supports triangulated meshes, but this will likely change in the future
 
 **MOVEMENT**
+
 You can translate around the scene using WASD and rotate using arrow keys. That's right folks, Doom is back on the menu.
 
 **COMMAND LINE ARGS**

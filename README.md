@@ -13,24 +13,24 @@ Its also a tad memory-hungry. I've done all the insane memory saving I could thi
 But this is because all drawing is first entered into an array holding data for the entire screen. This speeds up the drawing process dramatically, so Chugraph can eat all the memory it wants.
 That being said, further optimization is a constant goal.
 
-It does a decent enough job at replicating the native functions of an OC GPU, although some have yet to be added.
+**It does a decent enough job at replicating the native functions of an OC GPU, although some have yet to be added.**
 - SetPixel() and Fill() work very similarly to their native counterparts, except they do not handle text.
   Pixel-space in Chugraph is propped up to be double-height, as to supply the user with proper square pixels
   Text cannot be displayed on a sub-pixel level, so SetText() acts as a solution to that problem.
 - SetText() is your means of setting text on the screen. There is one caveat however:
   The coordinates can be a bit finicky. It's been a while since I had to place a string somewhere specific so you may have to play with it a bit to get some text set where you want it to go.
   
-As for non-native functions, there are quite a few:
+**As for non-native functions, there are quite a few:**
 - ClearScreen() and ClearRegion() are a faster way to clear the screen than Fill()
 - GetScreenWidth() and GetScreenHeight() returns the "functional" dimensions of the screen, as Chugraph sees it. (double-height applied)
 - DrawLine() draws a line between two points
 - DrawTriangle() draws a triangle between three points
 - FillTriangle() fills a triangle between three points
 
-To show your beautiful drawing on the screen, you must use UpdateScreen()
-Chugraph is single-buffered, so I very much recommend clearing the screen and redrawing each frame. This may sound terrible, but unless you're rendering a very chaotic screen, Chugraph can handle it.
+**To show your beautiful drawing on the screen, you must use UpdateScreen()**
+- Chugraph is single-buffered, so I very much recommend clearing the screen and redrawing each frame. This may sound terrible, but unless you're rendering a very chaotic screen, Chugraph can handle it.
 
-Useful command line args:
+**Useful command line args:**
 
 -d starts demo mode, only shows debug stats. use with either -w or -c to show some stuff
 
@@ -40,7 +40,7 @@ Useful command line args:
 
 -p Prints 256 colors in a neat rectangle
 
-The debug panel shows a few helpful stats that may aid in your own optimization efforts. To fit into a reasonably-sized area, I have shortened the names of many the variables. The extended versions are as follows:
+**The debug panel shows a few helpful stats that may aid in your own optimization efforts:**
 - FPS: Your average frames-per-second over the last 50 frames
 - PIXU: The amount of times a pixel was set into the screen buffer in the previous frame
 - INVR: How many times a compiled draw string was inverted in the previous frame, to save on having to swap foreground and background colors
@@ -62,3 +62,40 @@ Chugkey keeps track of which keys are being held in a Key Value table.
   I only have it working for standard keys, and for arrow keys. This will be expanded sometime in the future
 
 Chugkey is suboptimal, as keypresses sometimes lag behind. Still quite handy for test benching.
+
+## Chug3D
+A fairly quick .obj renderer, as long as the tricount is a tad low
+
+If you thought Chugraph was unreadable, I recommend not taking a peek into the code for Chug3D
+
+The codebase for this originated from a tutorial by Javidx9 on YouTube (https://youtu.be/ih20l3pJoeU), then was optimized (a lot) for a low memory Lua environment.
+
+**Chug3D requires both Chugkey and Chuggraph to run**
+
+At the moment, loading .obj files with some command line arguments is **all** this does. It may be expanded into something more in the future, but that mostly depends on how much more I can optimize.
+
+**USAGE**
+- Move an .obj file into the same folder as Chug3D
+- Run "chug3d --model=[objfilename]"
+- If you've done everything correctly, you should now have a 3d model rendering in a minecraft computer. Very awesome.
+- If you get the cube, something has gone wrong. My .obj parser does not account for all possible options, so you may have to re-export it in blender with some of the extra features turned off.
+- Also, this only supports triangulated meshes, but this will likely change in the future
+
+**MOVEMENT**
+You can translate around the scene using WASD and rotate using arrow keys. That's right folks, Doom is back on the menu.
+
+**COMMAND LINE ARGS**
+- --back=[hex color code] changes the background of the scene. Example: "--back=0xFF0000" (Red background)
+- -n Renders the surface normal of each triangle as a color, based on the normal's xyz values.
+- -d Renders the depth buffer
+- -s Shades the model based on the surface normal's alignment with the light direction normal (At the moment, the light direction is facing roughly the same direction as the camera's starting direction)
+- -b Blends the model into the background color using that pixel's depth buffer value. Can be combined with -s for a cool (yet laggy) render
+- -r Rotates the model on all 3 axis. If you want to pick which axis the model spins on, you can specify with -x, -y, and -z.
+- -w Renders the wireframe over the rasterized triangles
+
+**PERFORMANCE**
+I am quite proud of how far this project has come performance-wise, its almost 4x faster than when I finished the tutorial the original code was based on.
+
+That performance came at the cost of readability though, and I apologize if you were looking towards this code for some form of guidance. I'm not that great of a coder anyways, actually I'm pretty bad.
+
+All things considered, most of the nerfs to readability come from memory optimizations. I love OpenComputers, but why are we sticking such a garbage-producing language into a computer with only 2MB of memory? I mean come on.

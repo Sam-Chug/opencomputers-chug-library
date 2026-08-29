@@ -32,26 +32,27 @@ That being said, further optimization is a constant goal.
 
 **Useful command line args:**
 
--d starts demo mode, only shows debug stats. use with either -w or -c to show some stuff
-
--w (epilepsy warning) continuously draws 350 randomly placed white lines per frame, works as a stress test for two-color rendering situations
-
--c (epilepsy warning, seriously) continuously draws 350 randomly placed RGB + CMY + White lines per frame, works as a stress test for essentially random noise for extremely taxing rendering situations
-
--p Prints 256 colors in a neat rectangle
+| arg | outcome |
+|--------|--|
+| -d  | Enables demo mode, only shows debug stats. use with an addition arg below to show some stuff |
+| -w  | (Epilepsy Warning) Continuously draws 350 randomly placed white lines per frame, works as a stress test for two-color rendering situations |
+| -c  | (Epilepsy Warning, **seriously**) continuously draws 350 randomly placed RGB + CMY + White lines per frame, works as a stress test for essentially random noise for extremely taxing rendering situations |
+| -p  | Prints 256 colors in a neat rectangle |
 
 **The debug panel shows a few helpful stats that may aid in your own optimization efforts:**
-- FPS: Your average frames-per-second over the last 50 frames
-- PIXU: The amount of times a pixel was set into the screen buffer in the previous frame
-- INVR: How many times a compiled draw string was inverted in the previous frame, to save on having to swap foreground and background colors
-- SET: How many times gpu.set() was called in the previous frame
-- FILL: How many times gpu.fill() was called in the previous frame
-- SFORE: How many times gpu.setForeground() was called in the previous frame
-- SBACK: How many times gpu.setBackground() was called in the previous frame
-- CPU: How long the CPU was active in the previous frame, also shows a rolling average of the previous 50 frames
-- GPU: A poor attempt at estimating the call budget usage for the GPU. Can safely disregard, but may come in handy sometimes
-- FRAME: How long its been since the last frame was displayed on screen. This will usually hover around multiples of 50ms, as that is the length of a tick. The rolling average gives you a better idea of how close you are to breaking into the next framerate milestone.
-- MEM: The amount of memory used in the last frame. Pretty unreadable, I suggest looking at the rolling average.
+| Item | What it means |
+|------|--|
+| FPS | The average frames-per-second over the last 50 frames |
+| PIXU | The amount of times a pixel was set into the screen buffer in the previous frame |
+| INVR  | Renders the depth buffer |
+| SET  | How many times a compiled draw string was inverted in the previous frame, to save on having to swap foreground and background colors |
+| FILL  | How many times gpu.set() was called in the previous frame |
+| SFORE  | How many times gpu.setForeground() was called in the previous frame |
+| SBACK  | How many times gpu.setBackground() was called in the previous frame |
+| CPU  | How long the CPU was active in the previous frame, also shows a rolling average of the previous 50 frames |
+| GPU  | A poor attempt at estimating the call budget usage for the GPU. Can safely disregard, but may come in handy sometimes |
+| FRAME  | How long its been since the last frame was displayed on screen. This will usually hover around multiples of 50ms, as that is the length of a tick. |
+| MEM  | The amount of memory used in the last frame. Pretty unreadable, I suggest looking at the rolling average. |
 
 Proper documentation for Chugraph will come sometime in the future.
 
@@ -86,13 +87,15 @@ At the moment, loading .obj files with some command line arguments is _**all**_ 
 You can translate around the scene using WASD and rotate using arrow keys. That's right folks, Doom is back on the menu.
 
 **COMMAND LINE ARGS**
-- --back=[hex color code] changes the background of the scene. Example: "--back=0xFF0000" (Red background)
-- -n Renders the surface normal of each triangle as a color, based on the normal's xyz values.
-- -d Renders the depth buffer
-- -s Shades the model based on the surface normal's alignment with the light direction normal (At the moment, the light direction is facing roughly the same direction as the camera's starting direction)
-- -b Blends the model into the background color using that pixel's depth buffer value. Can be combined with -s for a cool (yet laggy) render
-- -r Rotates the model on all 3 axis. If you want to pick which axis the model spins on, you can specify with -x, -y, and -z.
-- -w Renders the wireframe over the rasterized triangles
+| arg | outcome |
+|--------|--|
+| --back=[hexcolor]  | Changes the background of the scene. Example: "--back=0xFF0000" (Red background) |
+| -n  | Renders the surface normal of each triangle as a color, based on the normal's xyz values |
+| -d  | Renders the depth buffer |
+| -s  | Shades the model based on the surface normal's alignment with the light direction normal (Light direction is facing roughly the same as the camera's starting direction) |
+| -b  | Blends the model into the background color using that pixel's depth buffer value. Can be combined with -s for a cool (yet laggy) render |
+| -r  | Rotates the model on all 3 axis. If you want to pick which axis the model spins on, you can specify with -x, -y, and -z. |
+| -w  | Renders the wireframe over the rasterized triangles |
 
 **PERFORMANCE**
 
@@ -101,3 +104,5 @@ I am quite proud of how far this project has come performance-wise, its almost 4
 That performance came at the cost of readability though, and I apologize if you were looking towards this code for some form of guidance. I'm not that great of a coder anyways, actually I'm pretty bad.
 
 All things considered, most of the nerfs to readability come from memory optimizations. I love OpenComputers, but why are we sticking such a garbage-producing language into a computer with only 2MB of memory? I mean come on.
+
+

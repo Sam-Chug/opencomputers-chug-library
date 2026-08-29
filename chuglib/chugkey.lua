@@ -13,6 +13,8 @@ function chugkey.parseKeyCode(e)
         if e[4] ~= 0 then
             if e[4] == 0xCB then rKey = "LEFT"
             elseif e[4] == 0xCD then rKey = "RIGHT"
+            elseif e[4] == 0xC8 then rKey = "UP"
+            elseif e[4] == 0xD0 then rKey = "DOWN"
             end
         end
     -- else char pressed

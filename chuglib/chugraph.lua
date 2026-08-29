@@ -5,9 +5,7 @@ local _, ops = shell.parse(...)
 local computer = require("computer")
 local term = require("term")
 
-local chugraph = {
-    version = "0.2.0a"
-}
+local version = "0.3.0a"
 
 -- Functional resolution of the screen
 local funcWidth = 0
@@ -16,15 +14,20 @@ local funcHeight = 0
 local gpu, buffer
 local screenWidth, screenHeight
 
-local drawingMode = 0 -- | 0 = 1x1 █ | 1 = 1x2 ▀ | 2 = 0.5 x 1 ██
-
 local topHalfBlock = "▀"; local bottomHalfBlock = "▄"; local fullBlock = "█"
 local currentForeground = -1; local currentBackground = -1
+local sceneBGColor = 0x000000
 
-local screenBuffer = {}
+local colorBuffer = {}
+local charBuffer = {}
+local drawBuffer = {}
+
 local debugMode = false
 local debugDrawWhiteLines = false
 local debugDrawColorLines = false
+local debugTestColorLUTs = false
+local debugDoBenchmark = false
+
 local gpuUsageStats = {
     set = 0, fore = 0, back = 0, fill = 0, get = 0, blit = 0, pack = 0, unpack = 0,
     lastSet = 0, lastFore = 0, lastBack = 0, lastFill = 0, lastGet = 0, lastBlit = 0, lastPack = 0, lastUnpack = 0,
@@ -32,157 +35,74 @@ local gpuUsageStats = {
     cpuTime = os.clock() or 0, lastCpuTime = os.clock() or 0,
     frameTime = computer.uptime() or 0, lastFrameTime = computer.uptime() or 0,
     usedMem = computer.totalMemory() - computer.freeMemory(),
-    cpuTimeTotal = 0, frameTimeTotal = 0, usedMemTotal = 0
+    cpuTimeTotal = 0, frameTimeTotal = 0, usedMemTotal = 0, gpuUsageTotal = 0
 }
 
-local Insert = table.insert
-local Sub = string.sub
+local TableInsert = table.insert; local Sub = string.sub; local GetByte = string.byte; local StringFormat = string.format
+local Modulo = math.fmod; local Abs = math.abs; local Min = math.min; local Max = math.max
+local GPUAllocateBuffer, GPUSetActiveBuffer, GPUFreeBuffer, GPUFreeAllBuffers
+local GPUGetRes, GPUSetFG, GPUSetBG
+local GPUSet, GPUFill, GPUBitBlt
+
+-- Get hex value from color index
+local hexLUT = {}
+
+-- Get color index from hex color
+local colLUT = {}
 
 -- BUGS =======================================================
--- drawing doubleRes pixel on the bottom half of a text string will not be picked up by the renderer
+
+
 
 -- TODO OPTIMIZATIONS =========================================
--- Clear function to clear only set pixels
--- Reduce memory usage
--- Look into swapping screenBuffer to a 1D array, where each index is a string containing all packed strings for that row
-    -- This probably would greatly increase cpu overhead at the cost of huge memory savings
+-- Reduce memory usage (always and forever)
 
--- Benchmarking:
---       Blank Screen                                                (Values echoed for each benchmark)
---  800kb |  9ms cpu |  50ms f |   460 pack |  1976 unpack - Initial value
---  640kb |  8ms cpu |  50ms f |   460 pack |  1516 unpack - Removed unpack from addToFrameBuffer()
---  470kb |  7ms cpu |  50ms f |   460 pack |  1516 unpack - Removed bad caching tables
---  470kb |  7ms cpu |  50ms f |   460 pack |  1516 unpack - Shortened fillGroup table variable names
---  410kb |  7ms cpu |  50ms f |   460 pack |  1516 unpack - Removed iterative concat in fillGroup
---  405kb |  7ms cpu |  50ms f |   460 pack |  1516 unpack - Turned fillGroup into an array
---  405kb |  7ms cpu |  50ms f |   460 pack |   828 unpack - Function to return just forecolor from packed pixel
---  420kb |  7ms cpu |  50ms f |     3 fore |     2 back   - Pack/Unpack fully optimized(?) now optimize fore/back
---  420kb |  7ms cpu |  50ms f |     3 fore |     2 back   - Further optimized setFore/setBack
---  420kb |  7ms cpu |  50ms f |     3 fore |     2 back   - Optimized drawing groups to use less ram
---  405kb |  5ms cpu |  50ms f |     3 fore |     2 back   - Optimized resetting screenBuffer's update byte
---  435kb |  3ms cpu |  50ms f |     3 fore |     2 back   - Moved pixel update reset to drawFrame
---  435kb |  3ms cpu |  50ms f |   504 pack |   144 unpack - Optimized pixel unpacking
---  400kb |  3ms cpu |  50ms f |   504 pack |   144 unpack - Less garbage produced while unpacking
---  390kb |  4ms cpu |  50ms f |   504 pack |   144 unpack - Turned screenBuffer into 1D array
---  370kb |  4ms cpu |  50ms f |   504 pack |     0 unpack - Removed string.unpack, Cleaned up things that may become garbage
-
---      350 White Lines
---  770kb | 41ms cpu | 102ms f | 22000 pack | 37000 unpack - 
---  820kb | 28ms cpu |  98ms f | 22000 pack | 14500 unpack - 
---  620kb | 21ms cpu |  52ms f | 22000 pack | 14500 unpack - 
---  600kb | 20ms cpu |  51ms f | 22000 pack | 14500 unpack - 
---  790kb | 19ms cpu |  50ms f | 22000 pack | 14500 unpack - 
---  780kb | 19ms cpu |  50ms f | 22000 pack | 14500 unpack - 
---  690kb | 18ms cpu |  50ms f | 22000 pack |  7400 unpack - 
---  680kb | 19ms cpu |  50ms f |     3 fore |     7 back   - 
---  690kb | 18ms cpu |  50ms f |     3 fore |     4 back   - Seems good for 2 colors
---  690kb | 18ms cpu |  50ms f |     3 fore |     4 back   - 
---  680kb | 16ms cpu |  50ms f |     3 fore |     4 back   - 
---  770kb | 15ms cpu |  50ms f |     3 fore |     4 back   - Seems more ram hungry
---  770kb | 15ms cpu |  50ms f | 22000 pack |   149 unpack - Seems more ram hungry
---  700kb | 16ms cpu |  50ms f | 22000 pack |   149 unpack - Decent ram savings
---  660kb | 16ms cpu |  50ms f | 22000 pack |     0 unpack - 
-
---      350 Color Lines
--- 1250kb | 76ms cpu | 135ms f | 23000 pack | 44000 unpack - 
--- 1320kb | 62ms cpu | 100ms f | 23000 pack | 22000 unpack - 
--- 1200kb | 51ms cpu | 100ms f | 23000 pack | 22000 unpack - 
--- 1100kb | 50ms cpu | 100ms f | 23000 pack | 22000 unpack - Inconsistent ram usage
--- 1100kb | 51ms cpu | 100ms f | 23000 pack | 22000 unpack - Inconsistent ram usage
--- 1100kb | 51ms cpu | 100ms f | 23000 pack | 22000 unpack - More consistent ram usage, but leaks
--- 1200kb | 49ms cpu | 100ms f | 23000 pack | 10800 unpack - Seems more stable, less leaky
--- 1050kb | 52ms cpu | 100ms f |     9 fore |    68 back   - 
--- 1050kb | 50ms cpu | 100ms f |     9 fore |    66 back   - Not as good as I thought
---  830kb | 49ms cpu | 100ms f |    10 fore |    66 back   - Saves a ton of memory
---  820kb | 47ms cpu | 100ms f |    10 fore |    66 back   - 
---  810kb | 47ms cpu | 100ms f |    10 fore |    66 back   - Not much of a change
---  810kb | 45ms cpu | 100ms f | 23000 pack |   156 unpack - 
---  810kb | 46ms cpu | 100ms f | 23000 pack |   156 unpack - 
---  720kb | 45ms cpu | 100ms f | 23000 pack |     0 unpack - 
 
 -- TODO ==============================================
--- move demo to separate file
--- refit chugraph to work entirely with the 1x2 pixel format:
-    -- too many options to flex between all without bloat
-    -- different resolutions would likely have different color spaces, namely braille
+-- Move demo to separate file
 
--- SETTINGS ===================================================
 
--- Set how pixels should be rendered to the screen, either as full text blocks or some fractional text block
-local function setResolutionMode(resMode)
-    if resMode == "basic" then
-        drawingMode = 0
-        funcWidth = screenWidth; funcHeight = screenHeight
-    elseif resMode == "doubleHeight" then
-        drawingMode = 1
-        funcWidth = screenWidth; funcHeight = screenHeight * 2
-    elseif resMode == "halfWidth" then
-        drawingMode = 2
-        funcWidth = screenWidth // 2; funcHeight = screenHeight
-    end
-end
+-- GET/SET PIXEL DATA =========================================
 
-local function setBuffer(width, height)
-    buffer = gpu.allocateBuffer(width, height)
-    gpu.setActiveBuffer(buffer)
-end
-
-local function FreeAllBuffers()
-    chugraph.ClearScreen()
-    gpu.freeBuffer(buffer)
-    gpu.freeAllBuffers()
-end
-
--- Pack/unpack pixel format
--- Packed string is 8 bytes
--- I3: Fore, I3: Back, B: Char, B; Update
-local packingFormat = "I3I3BB"
-
--- Wants lua numbers
+-- TODO: Merge with GetPixel()
 local function unpackPixel(x, y)
-    -- If index < 1 or index >= funcWidth * funcHeight then print(index) end
-    gpuUsageStats.unpack = gpuUsageStats.unpack + 1
-    return string.unpack(packingFormat, screenBuffer[y * funcWidth + x])
+    local index = y * funcWidth + x
+    return colorBuffer[index] >> 24, colorBuffer[index] % 16777216, charBuffer[index], drawBuffer[index]
 end
 
 local function packPixel(x, y, fore, back, char, update)
     gpuUsageStats.pack = gpuUsageStats.pack + 1
-    screenBuffer[y * funcWidth + x] = packingFormat:pack(fore, back, string.byte(char), update or 1)
+    local index = y * funcWidth + x
+    colorBuffer[index] = (fore << 24) + back
+    charBuffer[index] = char
+    drawBuffer[index] = update or true
 end
 
 local function getPixelChar(x, y)
-    return screenBuffer[y * funcWidth + x]:byte(-2)
-end
-
--- Return if second-to-last byte is an empty space or not
-local function getPixelTextState(x, y)
-    return screenBuffer[y * funcWidth + x]:byte(-2) ~= 1
+    return charBuffer[y * funcWidth + x]
 end
 
 -- Return last byte in packed string, the update byte
 local function getPixelUpdateState(x, y)
-    return screenBuffer[y * funcWidth + x]:byte(-1)
+    return drawBuffer[y * funcWidth + x]
 end
 
 -- Return color value from packed string, first three bytes
 local function getPixelForeColor(x, y)
-    local b, g, r = screenBuffer[y * funcWidth + x]:byte(1, 3)
-    return (r << 16) + (g << 8) + b
+    return colorBuffer[y * funcWidth + x] >> 24
 end
 
 local function getPixelBackColor(x, y)
-    local b, g, r = screenBuffer[y * funcWidth + x]:byte(4, 6)
-    return (r << 16) + (g << 8) + b
+    return colorBuffer[y * funcWidth + x] % 16777216
 end
 
 -- Set empty screen buffer
 -- Fore, Back, Char, isText, Update
-local packedPixelTemplate
 local function buildScreenData()
-    screenBuffer = {}
-    packedPixelTemplate = packingFormat:pack(0x000000, 0x000000, string.byte(""), 0)
     for i = 1, funcWidth * funcHeight do
-        Insert(screenBuffer, packedPixelTemplate)
+        colorBuffer[i] = sceneBGColor << 24
+        charBuffer[i] = nil
+        drawBuffer[i] = false
     end
 end
 
@@ -190,44 +110,25 @@ end
 local function resetUpdateForRegion(x, y, width, height)
     for i = 0, width - 1 do
         for j = 0, height - 1 do
-            screenBuffer[(y + j) * funcWidth + (x + i)] = packedPixelTemplate
+            local index = (y + j) * funcWidth + x + i
+            colorBuffer[index] = sceneBGColor << 24
+            charBuffer[index] = nil
+            drawBuffer[index] = false
         end
     end
-end
-
--- Set main GPU and settings for Chugraph
-function chugraph.SetMainGPU(g, resMode, useBuffer, enableDebug)
-    gpu = g; -- TODO: detect gpu tier
-
-    screenWidth, screenHeight = gpu.getResolution()
-    setResolutionMode(resMode or "basic")
-
-    if useBuffer or false then setBuffer(screenWidth, screenHeight) end
-    if enableDebug or false then debugMode = true end
-
-    buildScreenData()
-end
-
--- Set graphics buffer back to default, clear screen, and exit to console
-function chugraph.ResetToCommandLine()
-    FreeAllBuffers()
-    gpu.setForeground(0xFFFFFF)
-    gpu.setBackground(0x000000)
-    gpu.fill(1, 1, screenWidth, screenHeight, " ")
-    term.setCursor(1, 1)
 end
 
 -- GPU DRAWING ================================================
 
 local function bitblt()
-    gpu.bitblt(0, 1, 1, screenWidth, screenHeight, buffer, 1, 1)
+    GPUBitBlt(0, 1, 1, screenWidth, screenHeight, buffer, 1, 1)
     gpuUsageStats.blit = gpuUsageStats.blit + 1
 end
 
 -- Set foreground drawing color
 local function setForeground(color)
     if currentForeground ~= color then
-        gpu.setForeground(color)
+        GPUSetFG(color)
         gpuUsageStats.fore = gpuUsageStats.fore + 1;
         currentForeground = color
     end
@@ -236,7 +137,7 @@ end
 -- Set background drawing color
 local function setBackground(color)
     if currentBackground ~= color then
-        gpu.setBackground(color)
+        GPUSetBG(color)
         gpuUsageStats.back = gpuUsageStats.back + 1;
         currentBackground = color
     end
@@ -247,7 +148,7 @@ local function set(x, y, foreColor, backColor, string)
     setForeground(foreColor)
     setBackground(backColor)
 
-    gpu.set(x, y, string)
+    GPUSet(x, y, string)
     gpuUsageStats.set = gpuUsageStats.set + 1
 end
 
@@ -255,8 +156,8 @@ end
 local function drawCharGroup(drawGroups)
     for rKey, rVal in pairs(drawGroups) do
         for cKey, cVal in pairs(rVal) do
-            for i = 1, #cVal.x do
-                set(cVal.x[i], cVal.y[i], rKey, cKey, cVal.s[i])
+            for i = 1, #cVal[1] do
+                set(cVal[1][i], cVal[2][i], rKey, cKey, cVal[3][i])
             end
         end
     end
@@ -264,14 +165,10 @@ end
 
 -- Check if pixel requires a redraw, also checks for other screen res modes
 local function needsUpdate(x, y)
-    local checkForUpdate = getPixelUpdateState(x, y) -- this pixel
-    if drawingMode == 0 then return checkForUpdate -- basic mode
-    elseif drawingMode == 1 then -- if doubleHeight then check pixel below
-        local nextYUpdate = getPixelUpdateState(x, y + 1)
-        if checkForUpdate == 1 or nextYUpdate == 1 then return 1 end
-        else return 0
-    end
-    return 0
+
+    if getPixelUpdateState(x, y) then return true end
+    if getPixelUpdateState(x, y + 1) then return true end
+    return false
 end
 
 -- Return inverse character based on current screen res mode
@@ -293,42 +190,27 @@ local function returnPixelData(x, y)
 
     -- If text, return letter and fore/back color
     local char = getPixelChar(x, y)
-    if char ~= 1 then
-        return getPixelForeColor(x, y), getPixelBackColor(x, y), string.char(char), true
+    if char ~= nil then
+        return getPixelForeColor(x, y), getPixelBackColor(x, y), char, true
 
     -- Else, this is a filled pixel so return back color
     else
-        -- Only unpack pixel data if the index needs an update
+        -- Get top and bottom colors
         local fore = getPixelForeColor(x, y)
-
-        -- Package pixel's sprites and fore/back colors
-        if drawingMode == 0 then
-
-            -- Basic pixel TODO this is probably broken
-            local back = getPixelBackColor(x, y)
-            return fore, back, fullBlock, false
-
-        elseif drawingMode == 1 then -- Double Y resolution
-
-            -- If top pixel set, both pixels require an update
-            local downFore = getPixelForeColor(x, y + 1)
-            if fore == downFore then
-                -- same color, send full block
-                return fore, downFore, fullBlock, false
-            else
-                -- different color, send half block
-                return fore, downFore, topHalfBlock, false
-            end
+        local downFore = getPixelForeColor(x, y + 1)
+        if fore == downFore then
+            -- same color, send full block
+            return fore, downFore, fullBlock, false
+        else
+            -- different color, send half block
+            return fore, downFore, topHalfBlock, false
         end
     end
 end
 
 -- Loop through screenBuffer and draw pixels that were changed this frame
 local function DrawFrame()
-    local xInc = 1; local yInc = 1
-    if drawingMode == 1 then -- TODO: Having these checks everywhere might be stupid
-        yInc = 2
-    end
+    local xInc = 1; local yInc = 2
 
     -- Holder variables
     local xSkipIndex = 0
@@ -348,7 +230,7 @@ local function DrawFrame()
             if x + xSkipIndex > funcWidth then goto skipx end
 
             -- If pixel doesn't require update, skip
-            if needsUpdate(x + xSkipIndex, y) == 0 then goto continue end
+            if not needsUpdate(x + xSkipIndex, y) then goto continue end
 
             -- Fore is the color of the first pixel put to the screen, (favor top-most pixel?)
             -- Back is the background of the first pixel put to the screen
@@ -357,8 +239,8 @@ local function DrawFrame()
             -- Mark pixel as finished updating
             indexTop = y * funcWidth + x + xSkipIndex
             indexBot = (y + 1) * funcWidth + x + xSkipIndex
-            screenBuffer[indexTop] = Sub(screenBuffer[indexTop], 1, -2) .. "\0"
-            screenBuffer[indexBot] = Sub(screenBuffer[indexBot], 1, -2) .. "\0"
+            drawBuffer[indexTop] = false
+            drawBuffer[indexBot] = false
 
             -- Get starting fill fillgroup values
             startFore, startBack, startChar, startText = returnPixelData(x + xSkipIndex, y)
@@ -385,11 +267,11 @@ local function DrawFrame()
 
                         -- If new colors equal to original, insert returned char
                         if newFore == fillGroup[3] then
-                            Insert(charString, newChar)
+                            TableInsert(charString, newChar)
                             charsAdded = charsAdded + 1
                         -- Otherwise, return inversed char, and set new color to original back
                         else
-                            Insert(charString, getInverseChar(newChar))
+                            TableInsert(charString, getInverseChar(newChar))
                             charsAdded = charsAdded + 1
                             fillGroup[4] = newBack
                         end
@@ -399,11 +281,11 @@ local function DrawFrame()
 
                         -- If new fore and original fore match, insert returned char
                         if fillGroup[3] == newFore then
-                            Insert(charString, newChar)
+                            TableInsert(charString, newChar)
                             charsAdded = charsAdded + 1
                         -- If new fore and original back match, insert inverted char
                         elseif fillGroup[4] == newFore then
-                            Insert(charString, getInverseChar(newChar))
+                            TableInsert(charString, getInverseChar(newChar))
                             charsAdded = charsAdded + 1
                         end
                     end
@@ -414,24 +296,24 @@ local function DrawFrame()
 
                         -- If new fore matches original fore, insert returned char and set original back to new fore
                         if newFore == fillGroup[3] then
-                            Insert(charString, newChar)
+                            TableInsert(charString, newChar)
                             charsAdded = charsAdded + 1
                             fillGroup[4] = newBack
                         -- If new back matches original fore, then insert inverted char and set original back to new fore
                         elseif newBack == fillGroup[3] then
-                            Insert(charString, getInverseChar(newChar))
+                            TableInsert(charString, getInverseChar(newChar))
                             charsAdded = charsAdded + 1
                             fillGroup[4] = newFore
                         end
 
                     -- New and original match exactly, insert returned char
                     elseif fillGroup[3] == newFore and fillGroup[4] == newBack then
-                        Insert(charString, newChar)
+                        TableInsert(charString, newChar)
                         charsAdded = charsAdded + 1
 
                     -- New and original match but are inverted, return inverted char
                     elseif fillGroup[3] == newBack and fillGroup[4] == newFore then
-                        Insert(charString, getInverseChar(newChar))
+                        TableInsert(charString, getInverseChar(newChar))
                         charsAdded = charsAdded + 1
                     else break end
                 end
@@ -441,8 +323,8 @@ local function DrawFrame()
                     break
                 -- Else, pixel is ready to draw and no longer requires updating
                 else
-                    screenBuffer[indexTop + 1] = Sub(screenBuffer[indexTop + 1], 1, -2) .. "\0"
-                    screenBuffer[indexBot + 1] = Sub(screenBuffer[indexBot + 1], 1, -2) .. "\0"
+                    drawBuffer[indexTop + 1] = false
+                    drawBuffer[indexBot + 1] = false
                 end
 
                 -- Colors different, sort colors by numerical value
@@ -466,11 +348,11 @@ local function DrawFrame()
             -- Add grouped pixels to list
             if drawGroup[fillGroup[3]] == nil then drawGroup[fillGroup[3]] = {} end
             if drawGroup[fillGroup[3]][fillGroup[4]] == nil then
-                drawGroup[fillGroup[3]][fillGroup[4]] = {x = {}, y = {}, s = {}}
+                drawGroup[fillGroup[3]][fillGroup[4]] = {{}, {}, {}}
             end
-            Insert(drawGroup[fillGroup[3]][fillGroup[4]].x, fillGroup[1])
-            Insert(drawGroup[fillGroup[3]][fillGroup[4]].y, fillGroup[2])
-            Insert(drawGroup[fillGroup[3]][fillGroup[4]].s, table.concat(charString))
+            TableInsert(drawGroup[fillGroup[3]][fillGroup[4]][1], fillGroup[1])
+            TableInsert(drawGroup[fillGroup[3]][fillGroup[4]][2], fillGroup[2])
+            TableInsert(drawGroup[fillGroup[3]][fillGroup[4]][3], table.concat(charString))
 
             fillGroup = nil
             ::continue::
@@ -494,7 +376,10 @@ local function addToFrameBuffer(x, y, foreColor, backColor, char)
     -- If char specified, set char
     -- Otherwise is pixel, so set empty space
     if backColor == nil then backColor = foreColor end
-    packPixel(x, y, foreColor, backColor, char or "")
+    packPixel(x, y, foreColor, backColor, char)
+
+    ::skipAddData::
+    foreColor, backColor = nil, nil
 end
 
 -- Set index and consecutive indices to string pixel data
@@ -512,81 +397,202 @@ local function textToFrameBuffer(x, y, foreColor, backColor, text, vertical)
             addToFrameBuffer(x, y + i - 1, foreColor, backColor, Sub(text, i, i))
         end
     end
+    foreColor, backColor, text = nil, nil, nil
 end
 
 -- Fill area on screen with specified color and char
-function chugraph.Fill(x, y, width, height, foreColor, backColor)
+-- TODO: This should just fill and update the screen buffer
+local function Fill(x, y, width, height, foreColor, backColor)
     for i = x, x + width - 1 do
         for j = y, y + height - 1 do
             addToFrameBuffer(i, j, foreColor, backColor)
         end
     end
+    foreColor, backColor = nil, nil
 end
 
 -- Clear region, send straight to gpu command, then loop and reset updates
-function chugraph.ClearRegion(x, y, width, height)
+local function ClearRegion(x, y, width, height)
 
     -- TODO: Handle fractional pixel clears, clear basic-sized pixel here and send fractionals to update regularly
-    local widthFixed = width; local heightFixed = height
-    local xFixed = x; local yFixed = y
-    if drawingMode == 1 then
-        heightFixed = (height // 2) + 1
-        yFixed = (y // 2) + 1
-    end
+    local widthFixed = width; local heightFixed = (height // 2) + 1
+    local xFixed = x; local yFixed = (y // 2) + 1
 
     resetUpdateForRegion(x, y, width, height)
 
-    setForeground(0x000000); setBackground(0x000000)
-    gpu.fill(xFixed, yFixed, widthFixed, heightFixed, " ")
+    setForeground(sceneBGColor); setBackground(sceneBGColor)
+    GPUFill(xFixed, yFixed, widthFixed, heightFixed, " ")
     gpuUsageStats.fill = gpuUsageStats.fill + 1
 end
 
-function chugraph.ClearScreen()
-    chugraph.ClearRegion(1, 1, funcWidth, funcHeight)
+local function ClearScreen()
+    ClearRegion(1, 1, funcWidth, funcHeight)
 end
 
 -- Return pixel data
-function chugraph.GetPixel(x, y)
+local function GetPixel(x, y)
     -- TODO: This probably doesn't work after changing how chars are stored
     local fore, back, char = unpackPixel(x, y)
-    return string.char(char) or " ", fore, back
+    return char or nil, fore, back
 end
 
 -- Set text to screen, rounds to nearest 
-function chugraph.SetText(x, y, string, foreColor, backColor, vertical)
-    local fixedX = x; local fixedY = y -- Crush pos into basic resolution pos, based on current functional screen res
-    if drawingMode == 1 then -- doubleheight
-        fixedY = (((fixedY + 1) // 2) * 2) - 1
-    end
+local function SetText(x, y, string, foreColor, backColor, vertical)
+    -- Crush pos into basic resolution pos, based on double-height res
+    local fixedX = x;
+    local fixedY = y % 2 == 1 and y or y - 1
 
     textToFrameBuffer(fixedX, fixedY, foreColor, backColor, string, vertical or false)
 end
 
-function chugraph.SetPixel(x, y, color)
+local function SetPixel(x, y, color)
     addToFrameBuffer(x, y, color)
+    color = nil
 end
 
-function chugraph.GetAspectRatio()
+local function GetAspectRatio()
     return funcHeight / funcWidth
 end
 
-function chugraph.GetScreenWidth()
+local function GetScreenWidth()
     return funcWidth
 end
 
-function chugraph.GetScreenHeight()
+local function GetScreenHeight()
     return funcHeight
+end
+
+local function SetSceneBackground(color)
+    sceneBGColor = color
 end
 
 -- COLOR ======================================================
 
-function chugraph.GetGreyscaleColor(value)
+-- Return nearest valid hex color from input RGB values (0 - 1)
+local function ValidHexFromRGB(r, g, b)
+    r = (r // 0.17) * 51
+    g = ((g // 0.125) * 36.5) // 1
+    b = Min((b // 0.25) * 64, 255)
+    return (r << 16) + (g << 8) + b
+end
+
+-- Return greyscale color from input value (0 - 1)
+local function GetGreyscaleColor(value)
     if value ~= value then return 0xFF0000 end
 
-    value = math.floor(value * 16) * 15
+    value = (value * 16 // 1) * 15
     value = (value * 256 * 256) + (value * 256) + value
-    value = math.max(math.min(value, 0xFFFFFF), 0x000000)
+    value = Max(Min(value, 0xFFFFFF), 0x000000)
     return value
+end
+
+-- Apply shade level to input color
+-- Testing: https://onecompiler.com/lua/44z92yjhe
+local function GetShadedColor(color, shade)
+
+    -- Extract RGB channels, get channel values from 0-1
+    local r = (color >> 16) / 255
+    local g = ((color % 65536) >> 8) / 255
+    local b = (color % 256) / 255
+
+    -- Multiply RGB and grayscale values by shade (0-1)
+    -- Also, get the "real" RGB hex value, before crushing back to a valid color code
+    r = r * shade
+    g = g * shade
+    b = b * shade
+    local grey = (r + g + b) / 3
+    local realRGB = ((r * 255 // 1) << 16) + ((g * 255 // 1) << 8) + (b * 255 // 1)
+
+    -- Inflate channel values back to 1-255, rounding to nearest available color index
+    r = (r // 0.17) * 51
+    g = ((g // 0.125) * 36.5) // 1
+    b = Min((b // 0.25) * 64, 255)
+    grey = (grey * 16 // 1) * 15
+
+    -- Recompile into hex color
+    -- Return whichever value is closest to the "real" shaded value
+    local hexRGB = (r << 16) + (g << 8) + b
+    local greyRGB = (grey << 16) + (grey << 8) + grey
+    if Abs(hexRGB - realRGB) < Abs(greyRGB - realRGB) then return hexRGB
+    else return greyRGB end
+end
+
+-- Blend first color with second color.
+-- Third agument is the amount of the second color to blend:
+-- 0 -> outputs color 1 and 1 -> outputs color 2
+local function BlendColor(c1, c2, amount)
+    -- Isolate RGB values from both colors
+    if c1 > c2 then
+        c1, c2 = c2, c1
+    end
+    local blend = Min(amount, 1)
+
+    local r1 = (c1 >> 16) / 255
+    local g1 = ((c1 % 65536) >> 8) / 255
+    local b1 = (c1 % 256) / 255
+    local r2 = (c2 >> 16) / 255
+    local g2 = ((c2 % 65536) >> 8) / 255
+    local b2 = (c2 % 256) / 255
+
+    -- Get difference between each RGB value
+    local rDiff = r2 - r1
+    local gDiff = g2 - g1
+    local bDiff = b2 - b1
+
+    -- Get blended RGB values and Grey value
+    local rNew = r1 + (rDiff * blend)
+    local gNew = g1 + (gDiff * blend)
+    local bNew = b1 + (bDiff * blend)
+    local grey = GetGreyscaleColor((rNew + gNew + bNew) / 3)
+
+    local realRGB = ((rNew * 255 // 1) << 16) + ((gNew * 255 // 1) << 8) + (bNew * 255 // 1)
+    local hexRGB = ValidHexFromRGB(rNew, gNew, bNew)
+    local greyRGB = ValidHexFromRGB(grey, grey, grey)
+    if Abs(hexRGB - realRGB) < Abs(greyRGB - realRGB) then return hexRGB
+    else return greyRGB end
+end
+
+-- TODO: Probably could be optimized, think about it later
+local function GetClosestValidColor(color)
+
+    -- TODO: Needs to check for greyscale colors
+    local r = (color >> 16) / 255
+    local g = ((color % 65536) >> 8) / 255
+    local b = (color % 256) / 255
+
+    return ValidHexFromRGB(r, g, b)
+end
+
+-- Unused, unless I really feel like saving ram
+local function createColorLUTs()
+    -- Cache RGB color values from 1 - 240
+    local index = 1
+    for r = 0, 5 do
+        for g = 0, 7 do
+            for b = 0, 4 do
+
+                local hexR = r * 51
+                local hexG = (g * 36.5) // 1
+                local hexB = Min(b * 64, 255)
+                local hexValue = (hexR << 16) + (hexG << 8) + hexB
+
+                hexLUT[index] = hexValue
+                colLUT[hexValue] = index
+
+                index = index + 1
+            end
+        end
+    end
+
+    -- 16 Remaining slots for greyscale
+    for g = 15, 240, 15 do
+        local hexValue = (g << 16) + (g << 8) + g
+
+        hexLUT[index] = hexValue
+        colLUT[hexValue] = index
+
+        index = index + 1
+    end
 end
 
 -- MATH =======================================================
@@ -605,7 +611,7 @@ local function drawLineLow(x1, y1, x2, y2, color)
     local y = y1
 
     for x = x1, x2 do
-        chugraph.SetPixel(x, y, color)
+        SetPixel(x, y, color)
         if D > 0 then
             y = y + yi; D = D + (2 * (dy - dx))
         else
@@ -629,7 +635,7 @@ local function drawLineHigh(x1, y1, x2, y2, color)
     local x = x1
 
     for y = y1, y2 do
-        chugraph.SetPixel(x, y, color)
+        SetPixel(x, y, color)
         if D > 0 then
             x = x + xi; D = D + (2 * (dx - dy))
         else
@@ -639,10 +645,10 @@ local function drawLineHigh(x1, y1, x2, y2, color)
 end
 
 -- Draw line from one point to the other
-function chugraph.DrawLine(x1, y1, x2, y2, color)
+local function DrawLine(x1, y1, x2, y2, color)
     x1 = x1 // 1; y1 = y1 // 1
     x2 = x2 // 1; y2 = y2 // 1
-    if math.abs(y2 - y1) < math.abs(x2 - x1) then
+    if Abs(y2 - y1) < Abs(x2 - x1) then
         if x1 > x2 then drawLineLow(x2, y2, x1, y1, color)
         else drawLineLow(x1, y1, x2, y2, color) end
     else
@@ -652,11 +658,10 @@ function chugraph.DrawLine(x1, y1, x2, y2, color)
 end
 
 -- Draw triangle from three sets of points
-function chugraph.DrawTriangle(tri, color)
-
-    chugraph.DrawLine(tri[1].x, tri[1].y, tri[2].x, tri[2].y, color)
-    chugraph.DrawLine(tri[2].x, tri[2].y, tri[3].x, tri[3].y, color)
-    chugraph.DrawLine(tri[3].x, tri[3].y, tri[1].x, tri[1].y, color)
+local function DrawTriangle(p, color)
+    DrawLine(p[1][1], p[1][2], p[2][1], p[2][2], color)
+    DrawLine(p[2][1], p[2][2], p[3][1], p[3][2], color)
+    DrawLine(p[3][1], p[3][2], p[1][1], p[1][2], color)
 end
 
 local function fillFlatBottomTriangle(x1, y1, x2, y2, x3, y3, color)
@@ -666,7 +671,7 @@ local function fillFlatBottomTriangle(x1, y1, x2, y2, x3, y3, color)
     local xEnd = x1
 
     for y = y1, y3 do
-        chugraph.DrawLine(xStart // 1, y, xEnd // 1, y, color)
+        DrawLine(xStart // 1, y, xEnd // 1, y, color)
         xStart = xStart + invSlope1
         xEnd = xEnd + invSlope2
     end
@@ -680,7 +685,7 @@ local function fillFlatTopTriangle(x1, y1, x2, y2, x3, y3, color)
     local xEnd = x3
 
     for y = y3, y2, -1 do
-        chugraph.DrawLine(xStart // 1, y, xEnd // 1, y, color)
+        DrawLine(xStart // 1, y, xEnd // 1, y, color)
         xStart = xStart - invSlope1
         xEnd = xEnd - invSlope2
     end
@@ -691,13 +696,13 @@ end
 -- https://www.sunshine2k.de/coding/java/TriangleRasterization/TriangleRasterization.html
 
 -- Fill triangle specified by input point set and color
-function chugraph.FillTriangle(tri, color)
+local function FillTriangle(tri, color)
 
     -- rounding down removes gaps between top/bottom tris
     -- look at how 3dtest handles filling tris for better coordinate handling
-    local x1 = tri[1].x // 1; local y1 = tri[1].y // 1
-    local x2 = tri[2].x // 1; local y2 = tri[2].y // 1
-    local x3 = tri[3].x // 1; local y3 = tri[3].y // 1
+    local x1 = tri[1][1] // 1; local y1 = tri[1][2] // 1
+    local x2 = tri[2][1] // 1; local y2 = tri[2][2] // 1
+    local x3 = tri[3][1] // 1; local y3 = tri[3][2] // 1
 
     -- sort by y value
     if y1 > y2 then
@@ -733,8 +738,19 @@ local memDiv = 1024 -- Measuring KB
 local memString = "KB"
 
 -- Debug Tracking
-local debugTimeCycles = 2; local debugCycleReset = 200
+local debugTimeCycles = 2; local debugCycleReset = 50
 local debugForeColor = 0xFFFFFF; local debugBackColor = 0x330040
+
+local function getGPUUsage()
+    -- Values were determined using a loop, increasing values until fps was sub-20
+    -- Set = 3000 | SetFG = 2600 | SetBG = 2600 | Fill = 2000
+    -- These values do not take into account the weight of BitBlt, whose impact I do not understand as of yet
+    -- This is largely speculative and likely very wrong but they do give a decent approximation of the GPU call allowance
+    return gpuUsageStats.lastSet  / 3000 +
+           gpuUsageStats.lastFill / 2000 +
+           gpuUsageStats.lastFore / 2600 +
+           gpuUsageStats.lastBack / 2600
+end
 
 -- Write debug stats to graphcis buffer
 local function drawDebug()
@@ -743,31 +759,48 @@ local function drawDebug()
     local averageCpuTime = gpuUsageStats.cpuTimeTotal / debugTimeCycles
     local averageFrameTime = gpuUsageStats.frameTimeTotal // debugTimeCycles
     local averageUsedMem = gpuUsageStats.usedMemTotal // debugTimeCycles
-
     local cpuTimeDiff = (gpuUsageStats.cpuTime - gpuUsageStats.lastCpuTime) * 1000
     local frameTimeDiff = math.ceil((gpuUsageStats.frameTime - gpuUsageStats.lastFrameTime) * 1000)
 
-    -- Draw debug information to screen
-    local line1 = string.format("SET: %5d | FILL: %4d | PACK: %5d", gpuUsageStats.lastSet, gpuUsageStats.lastFill, gpuUsageStats.lastPack)
-    local line2 = string.format("SFORE: %3d | SBACK: %3d | INVR: %5d", gpuUsageStats.lastFore, gpuUsageStats.lastBack, gpuUsageStats.lastInvert)
-    local line3 = string.format("CPU: %6.1fms | AVG: %6.1fms", cpuTimeDiff, averageCpuTime)
-    local line4 = string.format("GPU: %6.1fms | AVG: %6.1fms", 1.0, 1.0)
-    local line5 = string.format("FRAME: %4dms | AVG:   %4dms", frameTimeDiff, averageFrameTime)
-    local line6 = string.format("MEM: %6.1f%s | AVG: %6.1f%s", gpuUsageStats.usedMem / memDiv, memString, averageUsedMem / memDiv, memString)
-    chugraph.Fill(1, funcHeight - 13, 38, 14, debugBackColor, debugBackColor)
-    chugraph.SetText(1, funcHeight - 12, line1, debugForeColor, debugBackColor, false)
-    chugraph.SetText(1, funcHeight - 10, line2, debugForeColor, debugBackColor, false)
-    chugraph.SetText(1, funcHeight - 8,"--------------------------------------", debugForeColor, debugBackColor, false)
-    chugraph.SetText(1, funcHeight - 6, line3, debugForeColor, debugBackColor, false)
-    chugraph.SetText(1, funcHeight - 4, line4, debugForeColor, debugBackColor, false)
-    chugraph.SetText(1, funcHeight - 2, line5, debugForeColor, debugBackColor, false)
-    chugraph.SetText(1, funcHeight - 0, line6, debugForeColor, debugBackColor, false)
+    local gpuUsage = getGPUUsage() * 100
+    gpuUsageStats.gpuUsageTotal = gpuUsageStats.gpuUsageTotal + gpuUsage
+    local averageGpuUsage = gpuUsageStats.gpuUsageTotal / debugTimeCycles
 
+    -- Gather debugging information to show on panel
+    local debugLines = {
+        StringFormat(" FPS:   %4.1f |           ", 1000 / averageFrameTime),
+        StringFormat(" PIXU: %5d | INVR: %5d ", gpuUsageStats.lastPack, gpuUsageStats.lastInvert),
+        StringFormat(" SET: %6d | FILL: %5d ", gpuUsageStats.lastSet, gpuUsageStats.lastFill),
+        StringFormat(" SFORE: %4d | SBACK: %4d ", gpuUsageStats.lastFore, gpuUsageStats.lastBack),
+        " -------------------------",
+        StringFormat(" CPU: %4.1fms | AVG: %4.1fms ", cpuTimeDiff, averageCpuTime),
+        StringFormat(" GPU: %5.1f%% | AVG: %5.1f%% ", gpuUsage, averageGpuUsage),
+        StringFormat(" MEM: %4d%s | AVG: %4d%s ", (gpuUsageStats.usedMem / memDiv) // 1, memString, (averageUsedMem / memDiv) // 1, memString),
+        StringFormat(" FRM: %4dms | AVG: %4dms ", frameTimeDiff, averageFrameTime),
+    }
+
+    -- Flavor
+    Fill(1, funcHeight - 18, 27, 17, debugBackColor, debugBackColor)
+    DrawLine(1, funcHeight - 19, 27, funcHeight - 19, 0xFFFFFF)
+    DrawLine(1, funcHeight - 22, 5, funcHeight - 22, 0xFFFFFF)
+    DrawLine(13, funcHeight - 22, 27, funcHeight - 22, 0xFFFFFF)
+    SetText(1, funcHeight - 20, "DEBUG", debugForeColor, debugBackColor, false)
+    SetText(13, funcHeight - 20, StringFormat("Chugraph %s", version), debugForeColor, debugBackColor, false)
+
+    -- Draw debug strings
+    for i = 1, #debugLines do
+        local posY = funcHeight - (#debugLines - i) * 2
+        SetText(1, posY, debugLines[i], debugForeColor, debugBackColor, false)
+    end
+
+    -- To quick-average the times displayed, we tally up previous times and then divide them by the amount of times added
+    -- It's not the best way to do this, but it is accurate enough to get a decent readout without imposing too much overhead
     debugTimeCycles = debugTimeCycles + 1
     if debugTimeCycles > debugCycleReset then
         gpuUsageStats.cpuTimeTotal = averageCpuTime
         gpuUsageStats.frameTimeTotal = averageFrameTime
         gpuUsageStats.usedMemTotal = averageUsedMem
+        gpuUsageStats.gpuUsageTotal = averageGpuUsage
         debugTimeCycles = 2
     end
 end
@@ -802,7 +835,7 @@ end
 -- PUSH TO SCREEN =================================
 
 -- Blit gpu buffer to screen
-function chugraph.UpdateScreen()
+local function UpdateScreen()
     if debugMode then drawDebug() end
     DrawFrame()
     bitblt()
@@ -815,48 +848,121 @@ end
 -- TODO: Make separate demo functions and loop them by pressing some key
 -- Draw a random line inside rect
 local random = math.random
-local function demoDrawRandomLine(x, y, width, height)
+
+
+createColorLUTs()
+local function drawDemoGraphics(x, y, width, height)
 
     -- TODO right-most + bottom-most side is not being cleared
     -- Either ClearRegion() isnt built correctly or DrawLine is drawing longer than it should
-    chugraph.ClearScreen()
-    if debugDrawColorLines then
-        for i = 1, 50 do
-            chugraph.DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFF0000)
-            chugraph.DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0x00FF00)
-            chugraph.DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0x0000FF)
-            chugraph.DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFF00)
-            chugraph.DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0x00FFFF)
-            chugraph.DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFF00FF)
-            chugraph.DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
+    ClearScreen()
+
+    if debugDoBenchmark then
+        -- set = 3000
+        -- setFG, setBG = 2600
+        -- fill = 2000
+        -- Benchmark gpu commands
+        for i = 1, 1 do
+            GPUBitBlt(0, 1, 1, screenWidth, screenHeight, buffer, 1, 1)
         end
     end
 
     if debugDrawWhiteLines then
         for i = 1, 50 do
-            chugraph.DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
-            chugraph.DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
-            chugraph.DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
-            chugraph.DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
-            chugraph.DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
-            chugraph.DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
-            chugraph.DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
+            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
+            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
+            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
+            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
+            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
+            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
+            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
+        end
+    end
+
+    if debugDrawColorLines then
+        for i = 1, 50 do
+            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFF0000)
+            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0x00FF00)
+            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0x0000FF)
+            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFF00)
+            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0x00FFFF)
+            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFF00FF)
+            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
+        end
+    end
+
+    if debugTestColorLUTs then
+        for i = 1, 256 do
+            local xPos = Modulo((i - 1), 40)
+            local yPos = (i - 1) // 40
+
+            -- We know that i from 1 - 255 returns valid hex colors
+            -- We should pass these hex colors through the color index LUT to make sure they pair correctly
+            local hexValue = hexLUT[i]
+            local colorIndex = colLUT[hexValue]
+            local retestHex = hexLUT[colorIndex]
+            SetPixel(xPos + 10, yPos + 10, hexValue)
+            SetPixel(xPos + 10, yPos + 25, retestHex)
         end
     end
 end
 
+local function setBuffer(width, height)
+    buffer = GPUAllocateBuffer(width, height)
+    GPUSetActiveBuffer(buffer)
+end
+
+local function FreeAllBuffers()
+    ClearScreen()
+    GPUFreeBuffer(buffer)
+    GPUFreeAllBuffers() -- For safe keeping
+end
+
 -- Full clear screen to reset demo to cl
 local function demoCloseClear()
-    gpu.setForeground(0xFFFFFF)
-    gpu.setBackground(0x000000)
-    gpu.fill(1, 1, screenWidth, screenHeight, " ")
+    GPUSetFG(0xFFFFFF)
+    GPUSetBG(0x000000)
+    GPUFill(1, 1, screenWidth, screenHeight, " ")
+end
+
+-- Set graphics buffer back to default, clear screen, and exit to console
+local function ResetToCommandLine()
+    FreeAllBuffers()
+    GPUSetFG(0xFFFFFF)
+    GPUSetBG(0x000000)
+    GPUFill(1, 1, screenWidth, screenHeight, " ")
+    term.setCursor(1, 1)
+end
+
+-- Set main GPU and settings for Chugraph
+local function SetMainGPU(g, resMode, useBuffer, enableDebug)
+
+    gpu = g
+    GPUAllocateBuffer = gpu.allocateBuffer
+    GPUSetActiveBuffer = gpu.setActiveBuffer
+    GPUFreeBuffer = gpu.freeBuffer
+    GPUFreeAllBuffers = gpu.freeAllBuffers
+    GPUGetRes = gpu.getResolution
+    GPUSetFG = gpu.setForeground
+    GPUSetBG = gpu.setBackground
+    GPUSet = gpu.set
+    GPUFill = gpu.fill
+    GPUBitBlt = gpu.bitblt
+
+    screenWidth, screenHeight = GPUGetRes()
+    funcWidth = screenWidth; funcHeight = screenHeight * 2
+
+    if useBuffer or false then setBuffer(screenWidth, screenHeight) end
+    if enableDebug or false then debugMode = true end
+
+    buildScreenData()
 end
 
 -- Show examples of graphical features
 -- TODO: error handling
 local function demoGraphics()
-    chugraph.SetMainGPU(component.gpu, "doubleHeight", true, true)
-    chugraph.ClearScreen()
+    SetMainGPU(component.gpu, "doubleHeight", true, true)
+    ClearScreen()
 
     while true do
         local tEvent = table.pack(event.pull(0))
@@ -869,9 +975,9 @@ local function demoGraphics()
             end
         end
 
-        demoDrawRandomLine(5, 5, funcWidth - 5, funcHeight - 5)
-        chugraph.SetText(1, 1, 'Press "Q" To Exit Demo', 0xFFFFFF, 0x000000, false)
-        chugraph.UpdateScreen()
+        drawDemoGraphics(5, 5, funcWidth - 5, funcHeight - 5)
+        SetText(1, 1, 'Press "Q" To Exit Demo', 0xFFFFFF, 0x000000, false)
+        UpdateScreen()
     end
 end
 
@@ -881,11 +987,43 @@ end
 local function setVariables()
     if ops.w then debugDrawWhiteLines = true end
     if ops.c then debugDrawColorLines = true end
+    if ops.b then debugDoBenchmark = true end
+    if ops.p then
+        debugTestColorLUTs = true
+        createColorLUTs()
+    end
     if ops.d then demoGraphics() end
 end
 setVariables()
 -- demoGraphics()
 
 -- CREDITS
-print("Drawn By Chugraph " .. chugraph.version)
-return chugraph
+print("Rendered with Chugraph " .. version)
+
+return {
+    SetMainGPU = SetMainGPU,
+    ResetToCommandLine = ResetToCommandLine,
+    UpdateScreen = UpdateScreen,
+
+    ClearRegion = ClearRegion,
+    ClearScreen = ClearScreen,
+    SetSceneBackground = SetSceneBackground,
+
+    GetPixel = GetPixel,
+    SetPixel = SetPixel,
+    SetText = SetText,
+    Fill = Fill,
+
+    GetAspectRatio = GetAspectRatio,
+    GetScreenWidth = GetScreenWidth,
+    GetScreenHeight = GetScreenHeight,
+
+    GetClosestValidColor = GetClosestValidColor,
+    GetGreyscaleColor = GetGreyscaleColor,
+    GetShadedColor = GetShadedColor,
+    BlendColor = BlendColor,
+
+    DrawLine = DrawLine,
+    DrawTriangle = DrawTriangle,
+    FillTriangle = FillTriangle
+}

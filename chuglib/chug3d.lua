@@ -14,7 +14,7 @@ local version = "0.2.1a"
 
 -- Graphics Library
 local gpu = require("chugraph")
-gpu.SetMainGPU(component.gpu, "doubleHeight", true, true)
+gpu.SetMainGPU(component.gpu, "doubleHeight", false, true)
 
 -- Input manager
 local inputManager = require("chugkey")
@@ -100,6 +100,18 @@ local TInsert = table.insert; local TRemove = table.remove
 -- TEXTURES (Move to chugraph?)
 -- ============================================================
 
+-- Default cube, if no meshes are able to load
+local defaultCubeOBJ = {
+    "v -0.5 0.5 0.5", "v -0.5 -0.5 0.5", "v -0.5 0.5 -0.5", "v -0.5 -0.5 -0.5",
+    "v 0.5 0.5 0.5", "v 0.5 -0.5 0.5", "v 0.5 0.5 -0.5", "v 0.5 -0.5 -0.5",
+    "vt 0.875 0.5", "vt 0.625 0.75", "vt 0.625 0.5", "vt 0.375 1",
+    "vt 0.375 0.75", "vt 0.625 0", "vt 0.375 0.25", "vt 0.375 0",
+    "vt 0.375 0.5", "vt 0.125 0.75", "vt 0.125 0.5", "vt 0.625 0.25",
+    "vt 0.875 0.75", "vt 0.625 1",
+    "f 5/1 3/2 1/3", "f 3/2 8/4 4/5", "f 7/6 6/7 8/8", "f 2/9 8/10 6/11", "f 1/3 4/5 2/9", "f 5/12 2/9 6/7",
+    "f 5/1 7/13 3/2", "f 3/2 7/14 8/4", "f 7/6 5/12 6/7", "f 2/9 4/5 8/10", "f 1/3 3/2 4/5", "f 5/12 1/3 2/9"
+}
+
 -- Default texture
 local missingTex = {
     {0xFF00FF, 0x2D2D2D, 0xFF00FF, 0x2D2D2D},
@@ -182,8 +194,89 @@ local function fileExists(filename)
     return false
 end
 
+-- For default cube mesh, this is probably stupid but I can't think of a clean way to merge this below
+local function getMeshFromText(text)
+    local tris = {}
+    local verts = {}
+    local uvs = {}
+    for i = 1, #text do
+        local line = text[i]
+        local data = {}
+        for item in line:gmatch("%S+") do
+            TInsert(data, item)
+        end
+        if data == nil or data[1] == nil then goto continue end
+
+        -- Vertex position
+        if data[1] == "v" then
+            TInsert(verts, {tonumber(data[2]), tonumber(data[3]), tonumber(data[4]), 1})
+
+        -- TODO: Vertex normals, could do shading eventually
+        elseif data[1] == "vn" then
+            -- Do nothing... for now....
+
+        -- UVs
+        elseif data[1] == "vt" then
+            TInsert(uvs, Vec2D(tonumber(data[2]), tonumber(data[3])))
+
+        -- Face data
+        elseif data[1] == "f" then
+
+            -- Check if face data packs other information inside
+            local _, parts = data[2]:gsub("/", "")
+
+            -- If more information than points given, then parse it
+            if parts == 1 then
+
+                local pointData = {}
+                for i = 1, 3 do
+                    for item in data[1 + i]:gmatch("%d+") do
+                        TInsert(pointData, tonumber(item))
+                    end
+                end
+                -- Create triangle, get its vertex indices and uv coordiantes
+                local newTri = FastTriangle()
+                newTri[2] = {{uvs[pointData[2]][1], uvs[pointData[2]][2], 1},
+                             {uvs[pointData[4]][1], uvs[pointData[4]][2], 1},
+                             {uvs[pointData[6]][1], uvs[pointData[6]][2], 1}}
+                newTri[6] =  {pointData[1], pointData[3], pointData[5]}
+                TInsert(tris, newTri)
+
+            elseif parts == 2 then
+                -- vert/uv/vnormal
+
+                local pointData = {}
+                for i = 1, 3 do
+                    for item in data[1 + i]:gmatch("%d+") do
+                        TInsert(pointData, tonumber(item))
+                    end
+                end
+
+                -- Create triangle, get its vertex indices and uv coordiantes
+                local newTri = FastTriangle()
+                newTri[2] = {{uvs[pointData[2]][1], uvs[pointData[2]][2], 1},
+                             {uvs[pointData[5]][1], uvs[pointData[5]][2], 1},
+                             {uvs[pointData[8]][1], uvs[pointData[8]][2], 1}}
+                newTri[6] =  {pointData[1], pointData[4], pointData[7]}
+                TInsert(tris, newTri)
+
+            -- Otherwise, just grab the verts
+            else
+                local newTri = FastTriangle()
+                newTri[6] = {tonumber(data[2]), tonumber(data[3]), tonumber(data[4])}
+                TInsert(tris, newTri)
+            end
+        end
+        data = nil
+        line = nil
+        ::continue::
+    end
+    uvs = nil
+    return tris, verts
+end
+
 -- Load .obj from file at filenam, parse vertex/face data and build a list of triangles from it 
-local function getMeshFromFile(filename)
+local function getMeshFromFile(filename, inputString)
     local tris = {}
     local verts = {}
     local uvs = {}
@@ -601,27 +694,10 @@ local function createMesh()
     -- Verts, Projected Verts, Viewspace Verts, Tris, Textures, Lazy BF Count Tricount, Vertcount
     loadedMesh = {vert = {}, pVert = {}, vsVert = {}, tris = {}, 0, lbfc = {}, triCount = 0, vertCount = 0}
 
-    -- Default fallback model
-    -- TODO: Needs vert list, just copy/paste a cube over from blender
-    local defaultCube = {
-        Triangle({0, 0, 0, 1}, {0, 1, 0, 1}, {1, 1, 0, 1}, {0, 1, 1}, {0, 0, 1}, {1, 0, 1}, "grassSide"),
-        Triangle({0, 0, 0, 1}, {1, 1, 0, 1}, {1, 0, 0, 1}, {0, 1, 1}, {1, 0, 1}, {1, 1, 1}, "grassSide"),
-        Triangle({1, 0, 0, 1}, {1, 1, 0, 1}, {1, 1, 1, 1}, {0, 1, 1}, {0, 0, 1}, {1, 0, 1}, "grassSide"),
-        Triangle({1, 0, 0, 1}, {1, 1, 1, 1}, {1, 0, 1, 1}, {0, 1, 1}, {1, 0, 1}, {1, 1, 1}, "grassSide"),
-        Triangle({1, 0, 1, 1}, {1, 1, 1, 1}, {0, 1, 1, 1}, {0, 1, 1}, {0, 0, 1}, {1, 0, 1}, "grassSide"),
-        Triangle({1, 0, 1, 1}, {0, 1, 1, 1}, {0, 0, 1, 1}, {0, 1, 1}, {1, 0, 1}, {1, 1, 1}, "grassSide"),
-        Triangle({0, 0, 1, 1}, {0, 1, 1, 1}, {0, 1, 0, 1}, {0, 1, 1}, {0, 0, 1}, {1, 0, 1}, "grassSide"),
-        Triangle({0, 0, 1, 1}, {0, 1, 0, 1}, {0, 0, 0, 1}, {0, 1, 1}, {1, 0, 1}, {1, 1, 1}, "grassSide"),
-        Triangle({0, 1, 0, 1}, {0, 1, 1, 1}, {1, 1, 1, 1}, {0, 1, 1}, {0, 0, 1}, {1, 0, 1}, "grassTop"),
-        Triangle({0, 1, 0, 1}, {1, 1, 1, 1}, {1, 1, 0, 1}, {0, 1, 1}, {1, 0, 1}, {1, 1, 1}, "grassTop"),
-        Triangle({1, 0, 1, 1}, {0, 0, 1, 1}, {0, 0, 0, 1}, {0, 1, 1}, {0, 0, 1}, {1, 0, 1}, "grassBottom"),
-        Triangle({1, 0, 1, 1}, {0, 0, 0, 1}, {1, 0, 0, 1}, {0, 1, 1}, {1, 0, 1}, {1, 1, 1}, "grassBottom")
-    }
-
     -- Get default-cube if that's what we really want
     if modelFile == "default-cube" then
         -- Default mesh, if no others are specified
-        loadedMesh.tris = defaultCube -- TODO: Needs vert list as well
+        loadedMesh.tris, loadedMesh.vert = getMeshFromText(defaultCubeOBJ)
 
     -- Otherwise, get model from specified model file, if it exists
     else
@@ -631,7 +707,7 @@ local function createMesh()
             loadedMesh.tris, loadedMesh.vert = getMeshFromFile(modelFile)
         else
             modelFile = "default-cube-fallback"
-            loadedMesh.tris = defaultCube -- TODO: Needs vert list as well
+            loadedMesh.tris, loadedMesh.vert = getMeshFromText(defaultCubeOBJ)
         end
     end
 
@@ -913,10 +989,11 @@ local rasterizeStart; local rasterizeCumulative = 0
 -- After clipping, rasterize each triangle
 local function viewportClipTriangle(triToRaster)
 
-    local clipTrisToRaster = {{triToRaster[1], triToRaster[2], triToRaster[3], triToRaster[4], triToRaster[5]}}
-    local nNewTriangles = 1
-
     -- Check if any points are outside of screenspace
+    -- TODO: I hate creating this array if we dont need it (clipTrisToRaster)
+    -- How can this cleanly be skipped and just draw the single triToRaster sent into the function
+    local nNewTriangles = 1
+    local clipTrisToRaster = {{triToRaster[1], triToRaster[2], triToRaster[3], triToRaster[4], triToRaster[5]}}
     if triToRaster[1][1][1] < 1 or triToRaster[1][1][1] > screenWidth then goto clipTri end
     if triToRaster[1][1][2] < 1 or triToRaster[1][1][2] > screenHeight then goto clipTri end
     if triToRaster[1][2][1] < 1 or triToRaster[1][2][1] > screenWidth then goto clipTri end

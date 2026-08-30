@@ -2,7 +2,7 @@ local component = require("component")
 local shell = require("shell")
 local _, ops = shell.parse(...)
 local computer = require("computer")
-local version = "0.2.0a"
+local version = "0.2.1a"
 
 -- ============================================================
 -- CREDITS
@@ -907,14 +907,11 @@ local function texturedTriangle(p, u, tri)
 end
 
 -- Timing variables
-local rasterTrisStart; local rasterTrisEnd
+local rasterizeStart; local rasterizeCumulative = 0
 
 -- Clip each triangle against each side of the viewport
--- After clipping, render each triangle
--- TODO: Would be easier to benchmark if rendering was moved to a separate function
+-- After clipping, rasterize each triangle
 local function viewportClipTriangle(triToRaster)
-
-    rasterTrisStart = GetCPUTime() -- Timing
 
     local clipTrisToRaster = {{triToRaster[1], triToRaster[2], triToRaster[3], triToRaster[4], triToRaster[5]}}
     local nNewTriangles = 1
@@ -995,6 +992,7 @@ local function viewportClipTriangle(triToRaster)
     ::skipClip::
 
     -- Rasterize triangles based on what was specified in the cl args
+    rasterizeStart = GetCPUTime() -- Timing
     for i = 1, #clipTrisToRaster do
 
         -- Draw with texture
@@ -1018,11 +1016,11 @@ local function viewportClipTriangle(triToRaster)
     end
     triToRaster = nil
     clipTrisToRaster = nil
-    rasterTrisEnd = GetCPUTime()
+    rasterizeCumulative = rasterizeCumulative + (GetCPUTime() - rasterizeStart)
 end
 
-local projectTimeStart; local projectTimeEnd
-local segmentTimeStart; local segmentTimeStartFrameTotal = 0
+local projectionStart; local projectionCumulative = 0
+local segmentTimeStart; local segmentCumulative = 0
 local lazyCulledCount = 0
 
 -- For all tris in the loaded mesh, project into screen space
@@ -1030,7 +1028,7 @@ local lazyCulledCount = 0
 -- Then return list of valid tris
 local function getTrisToRaster()
 
-    projectTimeStart = GetCPUTime() -- Timing
+    projectionStart = GetCPUTime() -- Timing
 
     -- Rotate mesh if rotation enabled
     if doModelRotate then fTheta = fTheta + elapsedTime end
@@ -1084,9 +1082,7 @@ local function getTrisToRaster()
         end
 
         -- Get normal vector
-        local normal = {0, 0, 0}
-        local line1 = {0, 0, 0}
-        local line2 = {0, 0, 0}
+        local normal, line1, line2 = {0, 0, 0}, {0, 0, 0}, {0, 0, 0}
 
         -- Get lines either side of triangle
         line1 = vectorSub(loadedMesh.pVert[loadedMesh.tris[i][6][2]], loadedMesh.pVert[loadedMesh.tris[i][6][1]])
@@ -1100,8 +1096,6 @@ local function getTrisToRaster()
         local vCameraRay = vectorSub(loadedMesh.pVert[loadedMesh.tris[i][6][1]], vCamera)
 
         -- If back-facing, then skip rendering
-        -- Toy with the threshold a bit, since culled faces have a lag before being checked again
-        -- Should have more leeway to pad time for the culling index to tick down
         local normalToCamera = vectorDotProduct(normal, vCameraRay)
         if normalToCamera < bfcThreshold then
 
@@ -1114,6 +1108,7 @@ local function getTrisToRaster()
             triViewed[1][2] = loadedMesh.vsVert[loadedMesh.tris[i][6][2]]
             triViewed[1][3] = loadedMesh.vsVert[loadedMesh.tris[i][6][3]]
             -- Why can we copy vertex positions, but texture positions must be deep copied?
+            -- Nothing destructive seems to be happening, only direct copies made and changed (TODO: check)
             triViewed[2][1] = {loadedMesh.tris[i][2][1][1], loadedMesh.tris[i][2][1][2], loadedMesh.tris[i][2][1][3]}
             triViewed[2][2] = {loadedMesh.tris[i][2][2][1], loadedMesh.tris[i][2][2][2], loadedMesh.tris[i][2][2][3]}
             triViewed[2][3] = {loadedMesh.tris[i][2][3][1], loadedMesh.tris[i][2][3][2], loadedMesh.tris[i][2][3][3]}
@@ -1125,9 +1120,12 @@ local function getTrisToRaster()
             local clippedTris
             local clipped = {}
             clippedTris, clipped[1], clipped[2] = triClipPlane(nearPlane, nearNormal, triViewed)
+            projectionCumulative = projectionCumulative + (GetCPUTime() - projectionStart)
             for n = 1, clippedTris do
 
-                -- segmentTimeStart = GetCPUTime()
+                -- Since this loops, and each loop rasterizes a tri,
+                -- We need to measure projection more specifically
+                projectionStart = GetCPUTime()
 
                 -- Project triangles from 3D to 2D
                 clipped[n][1][1] = matrixMultiplyVector(matProj, clipped[n][1][1])
@@ -1178,10 +1176,11 @@ local function getTrisToRaster()
                 clipped[n][4] = loadedMesh.tris[i][4]
                 clipped[n][5] = lightDp
 
+                -- Projection timing point end
+                projectionCumulative = projectionCumulative + (GetCPUTime() - projectionStart)
+
                 -- Send triangle to be viewport clipped and then rendered
                 viewportClipTriangle(clipped[n])
-
-                -- segmentTimeStartFrameTotal = segmentTimeStartFrameTotal + GetCPUTime() - segmentTimeStart
             end
 
             -- Clear crap for gc
@@ -1189,15 +1188,12 @@ local function getTrisToRaster()
             triViewed = nil
 
         elseif normalToCamera > bfcLazyThreshold then
-            -- Face was backface-culled
-            -- Add a value between 1 and 2 to its lazy culling index
-            -- As frames tick by, faces with an index value above 0 tick down by one
-            -- Only faces with a lazy culling index of 0 move onto projection
+            -- If tri is facing far enough away from the camera,
+            -- prevent rendering it for a frame or two
             loadedMesh.lbfc[i] = i % 2 + 1
         end
         ::skipProj::
     end
-    projectTimeEnd = GetCPUTime()
 end
 
 -- ============================================================
@@ -1211,9 +1207,9 @@ local projectionTimeTotal = 0; local rasterizeTimeTotal = 0; local segmentTimeTo
 local function modelDebug()
     -- Timing Test Bench: https://onecompiler.com/lua/44zp873h2
 
-    projectionTimeTotal = projectionTimeTotal + (projectTimeEnd - projectTimeStart)
-    rasterizeTimeTotal = rasterizeTimeTotal + (rasterTrisEnd - rasterTrisStart)
-    segmentTimeTotal = segmentTimeTotal + segmentTimeStartFrameTotal
+    projectionTimeTotal = projectionTimeTotal + projectionCumulative
+    rasterizeTimeTotal = rasterizeTimeTotal + rasterizeCumulative
+    segmentTimeTotal = segmentTimeTotal + segmentCumulative
     local projAverage = projectionTimeTotal / debugCycles
     local rastAverage = rasterizeTimeTotal / debugCycles
     local segAverage = segmentTimeTotal / debugCycles
@@ -1226,7 +1222,9 @@ local function modelDebug()
     SetText(1, 11, string.format("LBFC: %d", lazyCulledCount), 0xFFFFFF, 0x000000, false)
     SetText(1, 13, string.format("SEG: %1.1fms", (segAverage) * 1000), 0xFFFFFF, 0x000000, false)
 
-    segmentTimeStartFrameTotal = 0
+    segmentCumulative = 0
+    projectionCumulative = 0
+    rasterizeCumulative = 0
     lazyCulledCount = 0
     debugCycles = debugCycles + 1
     if debugCycles > maxDebugCycles then
@@ -1283,6 +1281,7 @@ local function applyInputControls()
     if inputManager.isKeyDown(inputManager, KEY_TURNRIGHT) then
         fYaw = fYaw + (2 * elapsedTime)
     end
+    -- TODO: This changes the speed of translation
     if inputManager.isKeyDown(inputManager, KEY_TURNUP) then
         fPitch = fPitch - (2 * elapsedTime)
     end

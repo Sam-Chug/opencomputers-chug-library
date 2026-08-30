@@ -8,7 +8,7 @@ local version = "0.2.1a"
 -- CREDITS
 -- The code here was originally built following a tutorial by Javidx9 on youtube
 -- "Code-It-Yourself! 3D Graphics Engine" -> https://youtu.be/ih20l3pJoeU
--- Since then, I have done what I could to make this run faster in a low-memory lua environment.
+-- Since then, it has been heavily re-writtem and optimized for a low-memory lua environment
 -- What results is some terribly unreadable code.
 -- ============================================================
 
@@ -38,7 +38,7 @@ local doDrawWireframe = false
 local doDepthBlending = false
 
 local backgroundColor = 0x00DBFF            -- Color of the background in the scene
-local depthFadeDist = 0.4                   -- Depth value gets squared by this value when blending colors into the background
+local depthFadeDist = 0.4                   -- Square depth value by this value when blending colors into the background
 local bfcThreshold = 0.0                    -- Cull any face whos dot product against camera normal is above this
 local bfcLazyThreshold = 0.8                -- Lazy backface culling threshold. Faces turned this far away should be lazy occluded
 local lightDirection = {0.1, 0.1, -1}       -- [Sunlight-ish](0.3, 1, 0) | [Topdown-ish](0.1, 0.1, -1)
@@ -48,7 +48,7 @@ local fNear = 0.25                          -- Near plane distance
 local fFar = 1000                           -- Far plane distance
 local fFov = 90                             -- Field of view
 
-local modelFile = "teapot.obj"
+local modelFile = "teapot.obj"              -- Default loaded model, pretty much just for debugging
 
 local function setArguments()
     -- load model from input filename
@@ -146,39 +146,8 @@ local function FastTriangle()
     return {{{0, 0, 0, 1}, {0, 0, 0, 1}, {0, 0, 0, 1}}, {{0, 0, 1}, {0, 1, 1}, {1, 1, 1}}, 1, 1, 1, {0, 0, 0}}
 end
 
--- Triangle with KV pairs
-local function Triangle(vec1, vec2, vec3, uv1, uv2, uv3, texName)
-
-    -- TODO: Move this to where the mesh is loaded
-    --  -> Triangles should not always be asking for a texture
-    -- local texIndex = 1 -- 1 is the fallback for a missing texture
-    -- if texName ~= nil then
-    --     -- look for texture in loaded textures
-    --     for i = 1, #loadedTextures do
-    --         if texName == loadedTextures[i].name then
-    --             texIndex = i
-    --             goto addtri end
-    --     end
-    -- end
-    -- ::addtri::
-
-    return {
-        pi = {0, 0, 0},
-        p = {vec1 or {0, 0, 0, 1}, vec2 or {0, 0, 0, 1}, vec3 or {0, 0, 0, 1}}, -- Points
-        t = {uv1 or {0, 0, 1}, uv2 or {0, 1, 1}, uv3 or {1, 1, 1}},             -- Texture Coordinates
-        tex = 1,                                                                -- Texture index (in loadedTextures)
-        col = 0x000000,                                                         -- Color (if flat-colored)
-        l = 0,                                                                  -- Lighting Value (0-1)
-    }
-end
-
 local function Mat4x4()
-    return {
-        {0, 0, 0, 0},
-        {0, 0, 0, 0},
-        {0, 0, 0, 0},
-        {0, 0, 0, 0}
-    }
+    return {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
 end
 
 -- ============================================================
@@ -211,10 +180,6 @@ local function getMeshFromText(text)
         if data[1] == "v" then
             TInsert(verts, {tonumber(data[2]), tonumber(data[3]), tonumber(data[4]), 1})
 
-        -- TODO: Vertex normals, could do shading eventually
-        elseif data[1] == "vn" then
-            -- Do nothing... for now....
-
         -- UVs
         elseif data[1] == "vt" then
             TInsert(uvs, Vec2D(tonumber(data[2]), tonumber(data[3])))
@@ -229,8 +194,8 @@ local function getMeshFromText(text)
             if parts == 1 then
 
                 local pointData = {}
-                for i = 1, 3 do
-                    for item in data[1 + i]:gmatch("%d+") do
+                for j = 1, 3 do
+                    for item in data[1 + j]:gmatch("%d+") do
                         TInsert(pointData, tonumber(item))
                     end
                 end
@@ -240,30 +205,6 @@ local function getMeshFromText(text)
                              {uvs[pointData[4]][1], uvs[pointData[4]][2], 1},
                              {uvs[pointData[6]][1], uvs[pointData[6]][2], 1}}
                 newTri[6] =  {pointData[1], pointData[3], pointData[5]}
-                TInsert(tris, newTri)
-
-            elseif parts == 2 then
-                -- vert/uv/vnormal
-
-                local pointData = {}
-                for i = 1, 3 do
-                    for item in data[1 + i]:gmatch("%d+") do
-                        TInsert(pointData, tonumber(item))
-                    end
-                end
-
-                -- Create triangle, get its vertex indices and uv coordiantes
-                local newTri = FastTriangle()
-                newTri[2] = {{uvs[pointData[2]][1], uvs[pointData[2]][2], 1},
-                             {uvs[pointData[5]][1], uvs[pointData[5]][2], 1},
-                             {uvs[pointData[8]][1], uvs[pointData[8]][2], 1}}
-                newTri[6] =  {pointData[1], pointData[4], pointData[7]}
-                TInsert(tris, newTri)
-
-            -- Otherwise, just grab the verts
-            else
-                local newTri = FastTriangle()
-                newTri[6] = {tonumber(data[2]), tonumber(data[3]), tonumber(data[4])}
                 TInsert(tris, newTri)
             end
         end
@@ -276,10 +217,8 @@ local function getMeshFromText(text)
 end
 
 -- Load .obj from file at filenam, parse vertex/face data and build a list of triangles from it 
-local function getMeshFromFile(filename, inputString)
-    local tris = {}
-    local verts = {}
-    local uvs = {}
+local function getMeshFromFile(filename)
+    local tris, verts, uvs = {}, {}, {}
     for line in io.lines(filename) do
         local data = {}
         for item in line:gmatch("%S+") do
@@ -682,10 +621,12 @@ local function updateElapsedTime()
     timeLast = nowTime
 end
 
+local nLightDir
 local function createMesh()
 
     -- Precalculate some commonly used variables
     -- TODO: Probably could move more here (Lighting normal, etc)
+    nLightDir = vectorNormalize(lightDirection)
     screenWidth = gpu.GetScreenWidth(); screenHeight = gpu.GetScreenHeight()
     halfWidth = 0.5 * screenWidth; halfHeight = 0.5 * screenHeight
     matProj = matrixMakeProjection(fFov, gpu.GetAspectRatio(), fNear, fFar)
@@ -735,7 +676,6 @@ end
 -- TODO: Optimize/fix oob errors
 local depthBuffer = {}
 local function resetDepthBuffer()
-    depthBuffer = nil
     depthBuffer = {}
 end
 
@@ -812,6 +752,16 @@ end
 -- PROJECTION & RENDERING
 -- ============================================================
 
+-- This seems kind of dumb
+local texU, texV, texW
+local daxStep, dbxStep
+local du1Step, du2Step
+local dv1Step, dv2Step
+local dw1Step, dw2Step
+local y1Delta, y2Delta, ax, bx
+local texSu, texEu, texSv, texEv, texSw, texEw
+local dx2, dx1, dy2, dy1, du2, du1, dv2, dv1, dw2, dw1
+
 -- Draw projected triangle to the screen
 local function texturedTriangle(p, u, tri)
 
@@ -840,29 +790,23 @@ local function texturedTriangle(p, u, tri)
         u[2][3], u[3][3] = u[3][3], u[2][3]
     end
 
-    local dx1 = p[2][1] - p[1][1]
-    local dy1 = p[2][2] - p[1][2]
-    local du1 = u[2][1] - u[1][1]
-    local dv1 = u[2][2] - u[1][2]
-    local dw1 = u[2][3] - u[1][3]
+    dx1 = p[2][1] - p[1][1]
+    dy1 = p[2][2] - p[1][2]
+    du1 = u[2][1] - u[1][1]
+    dv1 = u[2][2] - u[1][2]
+    dw1 = u[2][3] - u[1][3]
 
-    local dx2 = p[3][1] - p[1][1]
-    local dy2 = p[3][2] - p[1][2]
-    local du2 = u[3][1] - u[1][1]
-    local dv2 = u[3][2] - u[1][2]
-    local dw2 = u[3][3] - u[1][3]
+    dx2 = p[3][1] - p[1][1]
+    dy2 = p[3][2] - p[1][2]
+    du2 = u[3][1] - u[1][1]
+    dv2 = u[3][2] - u[1][2]
+    dw2 = u[3][3] - u[1][3]
 
-    local texU, texV, texW = 0, 0, 0
-
-    local daxStep = 0; local dbxStep = 0
-    local du1Step = 0; local du2Step = 0
-    local dv1Step = 0; local dv2Step = 0
-    local dw1Step = 0; local dw2Step = 0
-    local y1Delta; local y2Delta
-    local ax; local bx
-    local texSu; local texEu
-    local texSv; local texEv
-    local texSw; local texEw
+    texU, texV, texW = 0, 0, 0
+    daxStep = 0; dbxStep = 0
+    du1Step = 0; du2Step = 0
+    dv1Step = 0; dv2Step = 0
+    dw1Step = 0; dw2Step = 0
 
     daxStep = dx1 / abs(dy1)
     dbxStep = dx2 / abs(dy2)
@@ -1135,9 +1079,6 @@ local function getTrisToRaster()
     -- Matrix view from camera
     local matView = matrixQuickInverse(matCamera)
 
-    -- Get light direction normal (This shouldn't be calculated per-frame unless the light direction is changing)
-    local normalizedLightDir = vectorNormalize(lightDirection)
-
     -- Near plane vector
     local nearPlane = {0, 0, fNear}
     local nearNormal = {0, 0, 1}
@@ -1177,7 +1118,7 @@ local function getTrisToRaster()
         if normalToCamera < bfcThreshold then
 
             -- Get amount of shade relative to light normal
-            local lightDp = max(min(lightBias + vectorDotProduct(normalizedLightDir, normal), 1), shadeMaximum)
+            local lightDp = max(min(lightBias + vectorDotProduct(nLightDir, normal), 1), shadeMaximum)
 
             -- TODO: This is potentially destructive, but who knows
             if doNormalFlatColoring then loadedMesh.tris[i][4] = getColorFromNormal(normal) end

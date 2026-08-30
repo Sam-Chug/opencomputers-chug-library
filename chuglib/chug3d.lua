@@ -14,7 +14,7 @@ local version = "0.2.1a"
 
 -- Graphics Library
 local gpu = require("chugraph")
-gpu.SetMainGPU(component.gpu, "doubleHeight", false, true)
+gpu.SetMainGPU(component.gpu, "doubleHeight", true, true)
 
 -- Input manager
 local inputManager = require("chugkey")
@@ -1179,24 +1179,20 @@ local function getTrisToRaster()
             -- Get amount of shade relative to light normal
             local lightDp = max(min(lightBias + vectorDotProduct(normalizedLightDir, normal), 1), shadeMaximum)
 
-            -- Convert world space -> view space
-            local triViewed = FastTriangle()
-            triViewed[1][1] = loadedMesh.vsVert[loadedMesh.tris[i][6][1]]
-            triViewed[1][2] = loadedMesh.vsVert[loadedMesh.tris[i][6][2]]
-            triViewed[1][3] = loadedMesh.vsVert[loadedMesh.tris[i][6][3]]
-            -- Why can we copy vertex positions, but texture positions must be deep copied?
-            -- Nothing destructive seems to be happening, only direct copies made and changed (TODO: check)
-            triViewed[2][1] = {loadedMesh.tris[i][2][1][1], loadedMesh.tris[i][2][1][2], loadedMesh.tris[i][2][1][3]}
-            triViewed[2][2] = {loadedMesh.tris[i][2][2][1], loadedMesh.tris[i][2][2][2], loadedMesh.tris[i][2][2][3]}
-            triViewed[2][3] = {loadedMesh.tris[i][2][3][1], loadedMesh.tris[i][2][3][2], loadedMesh.tris[i][2][3][3]}
-
             -- TODO: This is potentially destructive, but who knows
             if doNormalFlatColoring then loadedMesh.tris[i][4] = getColorFromNormal(normal) end
 
             -- Handle clipping triangles against near plane
             local clippedTris
-            local clipped = {}
-            clippedTris, clipped[1], clipped[2] = triClipPlane(nearPlane, nearNormal, triViewed)
+            local clipped = {{}, {}}
+            clippedTris, clipped[1], clipped[2] = triClipPlane(nearPlane, nearNormal, {
+               {loadedMesh.vsVert[loadedMesh.tris[i][6][1]],
+                loadedMesh.vsVert[loadedMesh.tris[i][6][2]],
+                loadedMesh.vsVert[loadedMesh.tris[i][6][3]]},
+               {{loadedMesh.tris[i][2][1][1], loadedMesh.tris[i][2][1][2], loadedMesh.tris[i][2][1][3]},
+                {loadedMesh.tris[i][2][2][1], loadedMesh.tris[i][2][2][2], loadedMesh.tris[i][2][2][3]},
+                {loadedMesh.tris[i][2][3][1], loadedMesh.tris[i][2][3][2], loadedMesh.tris[i][2][3][3]}}
+            })
             projectionCumulative = projectionCumulative + (GetCPUTime() - projectionStart)
             for n = 1, clippedTris do
 
@@ -1258,12 +1254,8 @@ local function getTrisToRaster()
 
                 -- Send triangle to be viewport clipped and then rendered
                 viewportClipTriangle(clipped[n])
+                clipped[n] = nil
             end
-
-            -- Clear crap for gc
-            clipped = nil
-            triViewed = nil
-
         elseif normalToCamera > bfcLazyThreshold then
             -- If tri is facing far enough away from the camera,
             -- prevent rendering it for a frame or two

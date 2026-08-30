@@ -5,11 +5,10 @@ local computer = require("computer")
 local version = "0.2.1a"
 
 -- ============================================================
--- CREDITS
+-- CREDITS:
 -- The code here was originally built following a tutorial by Javidx9 on youtube
 -- "Code-It-Yourself! 3D Graphics Engine" -> https://youtu.be/ih20l3pJoeU
--- Since then, it has been heavily re-writtem and optimized for a low-memory lua environment
--- What results is some terribly unreadable code.
+-- Since then, it has been heavily re-writtem and optimized for a low-memory lua environment.
 -- ============================================================
 
 -- Graphics Library
@@ -83,21 +82,19 @@ setArguments()
 -- LUA NONSENSE
 -- ============================================================
 
-local cos = math.cos; local sin = math.sin; local tan = math.tan
-local min = math.min; local max = math.max; local abs = math.abs
-local mod = math.fmod; local random = math.random
+local cos, sin, tan = math.cos, math.sin, math.tan
+local min, max, abs = math.min, math.max, math.abs
 local GetCPUTime = os.clock
 
-local ClearScreen = gpu.ClearScreen; local UpdateScreen = gpu.UpdateScreen
-local SetText = gpu.SetText; local SetPixel = gpu.SetPixel
-local DrawTriangle = gpu.DrawTriangle; local FillTriangle = gpu.FillTriangle
-local GetGreyscaleColor = gpu.GetGreyscaleColor; local GetShadedColor = gpu.GetShadedColor
-local BlendColor = gpu.BlendColor
+local ClearScreen, UpdateScreen = gpu.ClearScreen, gpu.UpdateScreen
+local SetText, SetPixel = gpu.SetText, gpu.SetPixel
+local DrawTriangle, FillTriangle = gpu.DrawTriangle, gpu.FillTriangle
+local GetGreyscaleColor, GetShadedColor, BlendColor = gpu.GetGreyscaleColor, gpu.GetShadedColor, gpu.BlendColor
 
 local TInsert = table.insert; local TRemove = table.remove
 
 -- ============================================================
--- TEXTURES (Move to chugraph?)
+-- TEXTURES & MODELS (Move to chugraph?)
 -- ============================================================
 
 -- Default cube, if no meshes are able to load
@@ -125,20 +122,8 @@ local missingTex = {
 local loadedTextures = {{name = "missingTex", w = #missingTex, h = #missingTex[1], tex = missingTex}}
 
 -- ============================================================
--- STRUCTS
+-- .OBJ MESH LOADING
 -- ============================================================
-
--- Some notes:
--- Vec2D ---- Array -> [u] [v] [w]
--- Vec3D ---- Array -> [x] [y] [z] [w]
-
-local function Vec2D(u, v, w)
-    return {u or 0, v or 0, w or 1}
-end
-
-local function Vec3D(x, y, z, w)
-    return {x or 0, y or 0, z or 0, w or 1}
-end
 
 -- Triangle to store loaded mesh data
 -- Vert indices are saved instead of vert values
@@ -148,19 +133,6 @@ local function MemTriangle()
     return {{0, 0, 0}, {{0, 0, 1}, {0, 1, 1}, {1, 1, 1}}, 1, 1, 1}
 end
 
--- Triangle as an array, to save on memory
--- Points, Uvs, Texture, Color, Lighting, Vert Index
-local function FastTriangle()
-    return {{{0, 0, 0, 1}, {0, 0, 0, 1}, {0, 0, 0, 1}}, {{0, 0, 1}, {0, 1, 1}, {1, 1, 1}}, 1, 1, 1, {0, 0, 0}}
-end
-
-local function Mat4x4()
-    return {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
-end
-
--- ============================================================
--- .OBJ MESH LOADING
--- ============================================================
 
 local function fileExists(filename)
     local f = io.open(filename, "r")
@@ -173,9 +145,7 @@ end
 
 -- For default cube mesh, this is probably stupid but I can't think of a clean way to merge this below
 local function getMeshFromText(text)
-    local tris = {}
-    local verts = {}
-    local uvs = {}
+    local tris, verts, uvs = {}, {}, {}
     for i = 1, #text do
         local line = text[i]
         local data = {}
@@ -190,7 +160,7 @@ local function getMeshFromText(text)
 
         -- UVs
         elseif data[1] == "vt" then
-            TInsert(uvs, Vec2D(tonumber(data[2]), tonumber(data[3])))
+            TInsert(uvs, {tonumber(data[2]), tonumber(data[3])})
 
         -- Face data
         elseif data[1] == "f" then
@@ -244,7 +214,7 @@ local function getMeshFromFile(filename)
 
         -- UVs
         elseif data[1] == "vt" then
-            TInsert(uvs, Vec2D(tonumber(data[2]), tonumber(data[3])))
+            TInsert(uvs, {tonumber(data[2]), tonumber(data[3])})
 
         -- Face data
         elseif data[1] == "f" then
@@ -254,6 +224,7 @@ local function getMeshFromFile(filename)
 
             -- If more information than points given, then parse it
             if parts == 1 then
+                -- Vertex/UV
 
                 local pointData = {}
                 for i = 1, 3 do
@@ -261,7 +232,7 @@ local function getMeshFromFile(filename)
                         TInsert(pointData, tonumber(item))
                     end
                 end
-                -- Create triangle, get its vertex indices and uv coordiantes
+
                 local newTri = MemTriangle()
                 newTri[1] =  {pointData[1], pointData[3], pointData[5]}
                 newTri[2] = {{uvs[pointData[2]][1], uvs[pointData[2]][2], 1},
@@ -270,7 +241,7 @@ local function getMeshFromFile(filename)
                 TInsert(tris, newTri)
 
             elseif parts == 2 then
-                -- vert/uv/vnormal
+                -- Vertex/UV/Vertex-Normal
 
                 local pointData = {}
                 for i = 1, 3 do
@@ -279,7 +250,6 @@ local function getMeshFromFile(filename)
                     end
                 end
 
-                -- Create triangle, get its vertex indices and uv coordiantes
                 local newTri = MemTriangle()
                 newTri[1] =  {pointData[1], pointData[4], pointData[7]}
                 newTri[2] = {{uvs[pointData[2]][1], uvs[pointData[2]][2], 1},
@@ -294,8 +264,7 @@ local function getMeshFromFile(filename)
                 TInsert(tris, newTri)
             end
         end
-        data = nil
-        line = nil
+        data, line = nil, nil
         ::continue::
     end
     uvs = nil
@@ -305,8 +274,6 @@ end
 -- ============================================================
 -- STRUCT FUNCTIONS
 -- ============================================================
-
--- #region Vector Math
 
 -- Add one vector to another
 local function vectorAdd(v1, v2)
@@ -335,13 +302,13 @@ end
 
 -- Get length of vector
 local function vectorLength(v)
-    return vectorDotProduct(v, v) ^ 0.5
+    return vectorDotProduct(v, v) ^ -0.5
 end
 
 -- Normalize vector between -1 and 1
 local function vectorNormalize(v)
     local l = vectorLength(v)
-    return {v[1] / l, v[2] / l, v[3] / l, 1}
+    return {v[1] * l, v[2] * l, v[3] * l, 1}
 end
 
 -- Get cross product of two input vectors
@@ -366,8 +333,7 @@ end
 local insidePi = {0, 0, 0}; local outsidePi = {0, 0, 0}
 local insideTi = {0, 0, 0}; local outsideTi = {0, 0, 0}
 
--- Test triangle against input plane
--- Return clipped triangle(s) if triangle intersects plane
+-- Test if triangle clips plane, return clipped triangles if so
 local function triClipPlane(planeP, planeN, inTri)
 
     local planeDP = vectorDotProduct(planeN, planeP)
@@ -483,8 +449,6 @@ local function triClipPlane(planeP, planeN, inTri)
     return 0
 end
 
--- #region Matrix Math
-
 -- Return vector i multiplied by matrix m
 local function matrixMultiplyVector(m, i)
     local v = {0, 0, 0, 0}
@@ -501,7 +465,7 @@ end
 
 -- Get rotation matrix at X angle angleRad
 local function matrixMakeRotationX(angleRad)
-    local matrix = Mat4x4()
+    local matrix = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
     matrix[1][1] = 1
 	matrix[2][2] = cos(angleRad * 0.5)
 	matrix[2][3] = sin(angleRad * 0.5)
@@ -513,7 +477,7 @@ end
 
 -- Get rotation matrix at Y angle angleRad
 local function matrixMakeRotationY(angleRad)
-    local matrix = Mat4x4()
+    local matrix = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
     matrix[1][1] = cos(angleRad)
 	matrix[1][3] = sin(angleRad)
 	matrix[3][1] = -sin(angleRad)
@@ -525,7 +489,7 @@ end
 
 -- Get rotation matrix at Z angle angleRad
 local function matrixMakeRotationZ(angleRad)
-    local matrix = Mat4x4()
+    local matrix = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
     matrix[1][1] = cos(angleRad)
 	matrix[1][2] = sin(angleRad)
 	matrix[2][1] = -sin(angleRad)
@@ -537,7 +501,7 @@ end
 
 -- Get matrix translated to values x, y, z
 local function matrixMakeTranslation(x, y, z)
-    local matrix = Mat4x4()
+    local matrix = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
     matrix[1][1] = 1
     matrix[2][2] = 1
     matrix[3][3] = 1
@@ -551,7 +515,7 @@ end
 -- Create projection matrix from input FOV, aspect ratio, near and far distance
 local function matrixMakeProjection(fFovDegrees, fAspectRatio, inFNear, inFFar)
     local fFovRad = 1 / tan(fFovDegrees * 0.5 / 180 * 3.14159)
-    local matrix = Mat4x4()
+    local matrix = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
     matrix[1][1] = fAspectRatio * fFovRad
     matrix[2][2] = fFovRad
     matrix[3][3] = inFFar / (inFFar - inFNear)
@@ -563,7 +527,7 @@ end
 
 -- Multiply matrix m1 by matrix m2
 local function matrixMultiplyMatrix(m1, m2)
-    local matrix = Mat4x4()
+    local matrix = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
     for c = 1, 4 do
         for r = 1, 4 do
             matrix[r][c] = m1[r][1] * m2[1][c] + m1[r][2] * m2[2][c] + m1[r][3] * m2[3][c] + m1[r][4] * m2[4][c]
@@ -583,7 +547,7 @@ local function matrixPointAt(pos, target, up)
 
     local newRight = vectorCrossProduct(newUp, newForward)
 
-    local matrix = Mat4x4()
+    local matrix = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
     matrix[1][1] = newRight[1];  	matrix[1][2] = newRight[2];	    matrix[1][3] = newRight[3];	    matrix[1][4] = 0
 	matrix[2][1] = newUp[1];	    matrix[2][2] = newUp[2];	    matrix[2][3] = newUp[3];		matrix[2][4] = 0
 	matrix[3][1] = newForward[1];	matrix[3][2] = newForward[2];	matrix[3][3] = newForward[3];	matrix[3][4] = 0
@@ -593,7 +557,7 @@ end
 
 -- Return inverse of matrix m
 local function matrixQuickInverse(m)
-    local matrix = Mat4x4()
+    local matrix = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
 	matrix[1][1] = m[1][1]; matrix[1][2] = m[2][1]; matrix[1][3] = m[3][1]; matrix[1][4] = 0
 	matrix[2][1] = m[1][2]; matrix[2][2] = m[2][2]; matrix[2][3] = m[3][2]; matrix[2][4] = 0
 	matrix[3][1] = m[1][3]; matrix[3][2] = m[2][3]; matrix[3][3] = m[3][3]; matrix[3][4] = 0
@@ -603,7 +567,6 @@ local function matrixQuickInverse(m)
 	matrix[4][4] = 1
 	return matrix;
 end
--- #endregion
 
 -- ============================================================
 -- RUNTIME
@@ -611,29 +574,24 @@ end
 
 local loadedMesh = {}
 local matProj, matRotY, matRotZ, matRotX
-local fTheta = 0
-local vCamera = Vec3D()
-local vLookDir = Vec3D()
-local fYaw = 0
-local fPitch = 0
+local vCamera, vLookDir = {0, 0, 0}, {0, 0, 0}
+local fTheta, fYaw, fPitch = 0, 0, 0
+local nLightDir
 
-local screenWidth, screenHeight
-local halfWidth, halfHeight
+local screenWidth, screenHeight, halfWidth, halfHeight
 local trisDrawnLast = 0
-local timeLast = computer.uptime()
-local nowTime = computer.uptime()
+
 local elapsedTime = 0.1
+local timeLast, nowTime = computer.uptime(), computer.uptime()
 local function updateElapsedTime()
     nowTime = computer.uptime()
     elapsedTime = nowTime - timeLast
     timeLast = nowTime
 end
 
-local nLightDir
 local function createMesh()
 
     -- Precalculate some commonly used variables
-    -- TODO: Probably could move more here (Lighting normal, etc)
     nLightDir = vectorNormalize(lightDirection)
     screenWidth = gpu.GetScreenWidth(); screenHeight = gpu.GetScreenHeight()
     halfWidth = 0.5 * screenWidth; halfHeight = 0.5 * screenHeight
@@ -645,13 +603,12 @@ local function createMesh()
 
     -- Get default-cube if that's what we really want
     if modelFile == "default-cube" then
-        -- Default mesh, if no others are specified
+
         loadedMesh.tris, loadedMesh.vert = getMeshFromText(defaultCubeOBJ)
 
     -- Otherwise, get model from specified model file, if it exists
     else
-        -- TODO:
-        -- Look for bmp or some texture format with the same name as the loaded mesh
+        -- TODO: Look for texture with the same name as the loaded mesh and load it as well
         if fileExists(modelFile) then
             loadedMesh.tris, loadedMesh.vert = getMeshFromFile(modelFile)
         else
@@ -660,6 +617,7 @@ local function createMesh()
         end
     end
 
+    -- Get tricount
     loadedMesh.triCount = #loadedMesh.tris
     loadedMesh.vertCount = #loadedMesh.vert
 
@@ -699,7 +657,7 @@ end
 -- Get color from xyz value of face normal
 local function getColorFromNormal(normal)
     -- Offset it for prettier colors
-    local fixed = vectorAdd(vectorMul(normal, 0.5), Vec3D(0.5, 0.5, 0.5))
+    local fixed = vectorAdd(vectorMul(normal, 0.5), {0.5, 0.5, 0.5})
 
     -- Inflate channel values back to 1-255, rounding to nearest available color index
     fixed[1] = (fixed[1] // 0.17) * 51
@@ -1004,15 +962,17 @@ local function viewportClipTriangle(triToRaster)
                 end
             end
 
+            -- TODO: Do this more elegantly
             -- If no clipping occurred, just add triangle
             if nTrisToAdd == -1 then
                 TInsert(clipTrisToRaster, {clipped[1][1], clipped[1][2], triToRaster[3], triToRaster[4], triToRaster[5]})
+            -- If clipping occurred, add all new triangles
+            else
+                for w = 1, nTrisToAdd do
+                    TInsert(clipTrisToRaster, {clipped[w][1], clipped[w][2], triToRaster[3], triToRaster[4], triToRaster[5]})
+                end
             end
 
-            -- If clipping occurred, add all new triangles
-            for w = 1, nTrisToAdd do
-                TInsert(clipTrisToRaster, {clipped[w][1], clipped[w][2], triToRaster[3], triToRaster[4], triToRaster[5]})
-            end
             TRemove(clipTrisToRaster, 1)
             clipped = nil
         end
@@ -1022,7 +982,7 @@ local function viewportClipTriangle(triToRaster)
 
     -- Rasterize triangles based on what was specified in the cl args
     rasterizeStart = GetCPUTime() -- Timing
-    for i = 1, #clipTrisToRaster do
+    for i = 1, nNewTriangles do
 
         -- Draw with texture
         if doDrawTextured then
@@ -1052,14 +1012,9 @@ local projectionStart; local projectionCumulative = 0
 local segmentTimeStart; local segmentCumulative = 0
 local lazyCulledCount = 0
 
--- For all tris in the loaded mesh, project into screen space
--- Skip any backfacing tris, and skip or clip tris behind near plane
--- Then return list of valid tris
-local function getTrisToRaster()
-
-    -- TODO: he projection timing points here are a little messy ->
-    -- There's a lot of possible branching to account for and rasterizing is handled per-loop
-    -- Not sure how else to do it cleanly
+-- Project verts, and then triangles from loaded mesh data
+-- Each triangle gets sent into the rasterizer
+local function rasterizeMesh()
 
     -- Rotate mesh if rotation enabled
     if doModelRotate then fTheta = fTheta + elapsedTime end
@@ -1068,12 +1023,12 @@ local function getTrisToRaster()
     matRotY = matrixMakeRotationY(doModelRotateY and fTheta * 0.25 or 0)
 
     -- Amount to translate model in scene
-    -- TODO: This should probably be backed into the loadedMesh table
-    local matTrans = Mat4x4()
+    -- TODO: This should probably be packed into the loadedMesh table
+    local matTrans = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
     matTrans = matrixMakeTranslation(0, 0, 7.5)
 
     -- Build mesh rotation matrix, handles if mesh is rotating
-    local matWorld = Mat4x4()
+    local matWorld = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
     matWorld = matrixMakeIdentity()
     matWorld = matrixMultiplyMatrix(matRotZ, matRotX)
     matWorld = matrixMultiplyMatrix(matWorld, matRotY)
@@ -1102,8 +1057,6 @@ local function getTrisToRaster()
 
     -- Then use projected vertices to construct and 
     for i = 1, loadedMesh.triCount do
-
-        -- Timing point start
         projectionStart = GetCPUTime()
 
         -- If triangle has a lazy culling index over 0, skip projection and decrement its index
@@ -1113,39 +1066,28 @@ local function getTrisToRaster()
             goto skipProj
         end
 
-        -- Get normal vector
+        -- Get face normal
         local normal, line1, line2 = {0, 0, 0}, {0, 0, 0}, {0, 0, 0}
-
-        -- Get lines either side of triangle
         line1 = vectorSub(loadedMesh.pVert[loadedMesh.tris[i][1][2]], loadedMesh.pVert[loadedMesh.tris[i][1][1]])
         line2 = vectorSub(loadedMesh.pVert[loadedMesh.tris[i][1][3]], loadedMesh.pVert[loadedMesh.tris[i][1][1]])
-
-        -- Get cross product of lines for triangle surface normal
         normal = vectorCrossProduct(line1, line2)
         normal = vectorNormalize(normal)
 
-        -- Get ray from triangle to camera
+        -- Compare face normal against camera normal for backface culling
         local vCameraRay = vectorSub(loadedMesh.pVert[loadedMesh.tris[i][1][1]], vCamera)
-
-        -- If back-facing, then skip rendering
         local normalToCamera = vectorDotProduct(normal, vCameraRay)
 
-        -- Timing point end
         projectionCumulative = projectionCumulative + (GetCPUTime() - projectionStart)
         if normalToCamera < bfcThreshold then
-
-            -- Timing point start
             projectionStart = GetCPUTime()
 
-            -- Get amount of shade relative to light normal
+            -- Get amount of shade relative to light normal, and find normal color if needed
             local lightDp = max(min(lightBias + vectorDotProduct(nLightDir, normal), 1), shadeMaximum)
-
-            -- TODO: This is potentially destructive, but who knows
             if doNormalFlatColoring then loadedMesh.tris[i][4] = getColorFromNormal(normal) end
 
-            -- Handle clipping triangles against near plane
-            local clippedTris
-            local clipped = {{}, {}}
+            -- Clip triangles against near plane
+            -- TODO: Is there a quick check we can perform to skip this step for tris beyond the near plane?
+            local clippedTris, clipped = 0, {{}, {}}
             clippedTris, clipped[1], clipped[2] = triClipPlane(nearPlane, nearNormal, {
                {loadedMesh.vsVert[loadedMesh.tris[i][1][1]],
                 loadedMesh.vsVert[loadedMesh.tris[i][1][2]],
@@ -1154,20 +1096,15 @@ local function getTrisToRaster()
                 {loadedMesh.tris[i][2][2][1], loadedMesh.tris[i][2][2][2], loadedMesh.tris[i][2][2][3]},
                 {loadedMesh.tris[i][2][3][1], loadedMesh.tris[i][2][3][2], loadedMesh.tris[i][2][3][3]}}
             })
-            -- Timing point end
+
             projectionCumulative = projectionCumulative + (GetCPUTime() - projectionStart) -- Timing point end
             for n = 1, clippedTris do
-
-                -- Timing point start
                 projectionStart = GetCPUTime()
 
-                -- Project triangles from 3D to 2D
+                -- Project points and uvs from 3D to 2D
                 clipped[n][1][1] = matrixMultiplyVector(matProj, clipped[n][1][1])
                 clipped[n][1][2] = matrixMultiplyVector(matProj, clipped[n][1][2])
                 clipped[n][1][3] = matrixMultiplyVector(matProj, clipped[n][1][3])
-
-                -- Project textures as well
-                -- clipped[n].texture.u/v/w[1, 2, 3]
                 clipped[n][2][1][1] = clipped[n][2][1][1] / clipped[n][1][1][4]
                 clipped[n][2][2][1] = clipped[n][2][2][1] / clipped[n][1][2][4]
                 clipped[n][2][3][1] = clipped[n][2][3][1] / clipped[n][1][3][4]
@@ -1196,8 +1133,6 @@ local function getTrisToRaster()
                 clipped[n][1][1] = vectorAdd(clipped[n][1][1], vOffsetView)
                 clipped[n][1][2] = vectorAdd(clipped[n][1][2], vOffsetView)
                 clipped[n][1][3] = vectorAdd(clipped[n][1][3], vOffsetView)
-
-                -- Scale into screenspace
                 clipped[n][1][1][1] = clipped[n][1][1][1] * halfWidth
                 clipped[n][1][2][1] = clipped[n][1][2][1] * halfWidth
                 clipped[n][1][3][1] = clipped[n][1][3][1] * halfWidth
@@ -1210,16 +1145,13 @@ local function getTrisToRaster()
                 clipped[n][4] = loadedMesh.tris[i][4]
                 clipped[n][5] = lightDp
 
-                -- Timing point end
-                projectionCumulative = projectionCumulative + (GetCPUTime() - projectionStart)
-
                 -- Send triangle to be viewport clipped and then rendered
+                projectionCumulative = projectionCumulative + (GetCPUTime() - projectionStart)
                 viewportClipTriangle(clipped[n])
                 clipped[n] = nil
             end
         elseif normalToCamera > bfcLazyThreshold then
-            -- If tri is facing far enough away from the camera,
-            -- prevent rendering it for a frame or two
+            -- If tri is facing far enough away from the camera, halt projection for a frame or two
             loadedMesh.lbfc[i] = i % 2 + 1
         end
         ::skipProj::
@@ -1230,13 +1162,12 @@ end
 -- DEBUG
 -- ============================================================
 
-local debugCycles = 1; local maxDebugCycles = 30
-local projectionTimeTotal = 0; local rasterizeTimeTotal = 0; local segmentTimeTotal = 0
+local debugCycles, maxDebugCycles = 1, 30
+local projectionTimeTotal, rasterizeTimeTotal, segmentTimeTotal = 0, 0, 0
+local debugFG, debugBG = 0xFFFFFF, 0x000000
 
 -- Print debug stats to the screen
 local function modelDebug()
-    -- Timing Test Bench: https://onecompiler.com/lua/44zp873h2
-
     projectionTimeTotal = projectionTimeTotal + projectionCumulative
     rasterizeTimeTotal = rasterizeTimeTotal + rasterizeCumulative
     segmentTimeTotal = segmentTimeTotal + segmentCumulative
@@ -1244,13 +1175,13 @@ local function modelDebug()
     local rastAverage = rasterizeTimeTotal / debugCycles
     local segAverage = segmentTimeTotal / debugCycles
 
-    SetText(1, 1, modelFile, 0xFFFFFF, 0x000000, false)
-    SetText(1, 3, string.format("TRIS: %d - VERT: %d", loadedMesh.triCount, loadedMesh.vertCount), 0xFFFFFF, 0x000000, false)
-    SetText(1, 5, string.format("DRAWN: %d", trisDrawnLast), 0xFFFFFF, 0x000000, false)
-    SetText(1, 7, string.format("Proj: %0.1fms", (projAverage) * 1000), 0xFFFFFF, 0x000000, false)
-    SetText(1, 9, string.format("Rast: %0.1fms", (rastAverage) * 1000), 0xFFFFFF, 0x000000, false)
-    SetText(1, 11, string.format("LBFC: %d", lazyCulledCount), 0xFFFFFF, 0x000000, false)
-    SetText(1, 13, string.format("SEG: %1.1fms", (segAverage) * 1000), 0xFFFFFF, 0x000000, false)
+    SetText(1, 1, modelFile, debugFG, debugBG, false)
+    SetText(1, 3, string.format("TRIS: %d - VERT: %d", loadedMesh.triCount, loadedMesh.vertCount), debugFG, debugBG, false)
+    SetText(1, 5, string.format("DRAWN: %d", trisDrawnLast), debugFG, debugBG, false)
+    SetText(1, 7, string.format("Proj: %0.1fms", (projAverage) * 1000), debugFG, debugBG, false)
+    SetText(1, 9, string.format("Rast: %0.1fms", (rastAverage) * 1000), debugFG, debugBG, false)
+    SetText(1, 11, string.format("LBFC: %d", lazyCulledCount), debugFG, debugBG, false)
+    SetText(1, 13, string.format("SEG: %1.1fms", (segAverage) * 1000), debugFG, debugBG, false)
 
     segmentCumulative = 0
     projectionCumulative = 0
@@ -1269,12 +1200,9 @@ end
 -- CONTROL
 -- ============================================================
 
-local KEY_UP = "Z"; local KEY_DOWN = "X"
-local KEY_FORWARD = "W"; local KEY_BACKWARD = "S"
-local KEY_LEFT = "A"; local KEY_RIGHT = "D"
-local KEY_TURNLEFT = "LEFT"; local KEY_TURNRIGHT = "RIGHT"
-local KEY_TURNUP = "UP"; local KEY_TURNDOWN = "DOWN"
-local KEY_QUIT = "Q"
+local KEY_FORWARD, KEY_LEFT, KEY_BACKWARD, KEY_RIGHT = "W", "A", "S", "D"
+local KEY_UP, KEY_DOWN, KEY_QUIT = "Z", "X", "Q"
+local KEY_TURNLEFT, KEY_TURNRIGHT, KEY_TURNUP, KEY_TURNDOWN = "LEFT", "RIGHT", "UP", "DOWN"
 local moveSpeed = 3
 local function applyInputControls()
 
@@ -1290,11 +1218,11 @@ local function applyInputControls()
     end
     if inputManager.isKeyDown(inputManager, KEY_LEFT) then
         -- right: x = -z and z = x
-        local vRight = vectorMul(Vec3D(-vLookDir[3], 0, vLookDir[1]), moveSpeed * elapsedTime)
+        local vRight = vectorMul({-vLookDir[3], 0, vLookDir[1]}, moveSpeed * elapsedTime)
         vCamera = vectorSub(vCamera, vRight)
     end
     if inputManager.isKeyDown(inputManager, KEY_RIGHT) then
-        local vRight = vectorMul(Vec3D(-vLookDir[3], 0, vLookDir[1]), moveSpeed * elapsedTime)
+        local vRight = vectorMul({-vLookDir[3], 0, vLookDir[1]}, moveSpeed * elapsedTime)
         vCamera = vectorAdd(vCamera, vRight)
     end
     if inputManager.isKeyDown(inputManager, KEY_FORWARD) then
@@ -1327,7 +1255,7 @@ end
 local function renderTriangles()
     ClearScreen()
     resetDepthBuffer()
-    getTrisToRaster()
+    rasterizeMesh()
 end
 
 local function main()
@@ -1346,7 +1274,6 @@ local function main()
             gpu.ResetToCommandLine()
             package.loaded["chugraph"] = nil
             package.loaded["chugkey"] = nil
-            package.loaded["bmpdecoder"] = nil
             break
         end
 

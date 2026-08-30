@@ -1049,7 +1049,9 @@ local lazyCulledCount = 0
 -- Then return list of valid tris
 local function getTrisToRaster()
 
-    projectionStart = GetCPUTime() -- Timing
+    -- TODO: he projection timing points here are a little messy ->
+    -- There's a lot of possible branching to account for and rasterizing is handled per-loop
+    -- Not sure how else to do it cleanly
 
     -- Rotate mesh if rotation enabled
     if doModelRotate then fTheta = fTheta + elapsedTime end
@@ -1057,9 +1059,12 @@ local function getTrisToRaster()
 	matRotX = matrixMakeRotationX(doModelRotateX and fTheta or 0)
     matRotY = matrixMakeRotationY(doModelRotateY and fTheta * 0.25 or 0)
 
+    -- Amount to translate model in scene
+    -- TODO: This should probably be backed into the loadedMesh table
     local matTrans = Mat4x4()
     matTrans = matrixMakeTranslation(0, 0, 7.5)
 
+    -- Build mesh rotation matrix, handles if mesh is rotating
     local matWorld = Mat4x4()
     matWorld = matrixMakeIdentity()
     matWorld = matrixMultiplyMatrix(matRotZ, matRotX)
@@ -1078,8 +1083,6 @@ local function getTrisToRaster()
 
     -- Matrix view from camera
     local matView = matrixQuickInverse(matCamera)
-
-    -- Near plane vector
     local nearPlane = {0, 0, fNear}
     local nearNormal = {0, 0, 1}
 
@@ -1091,6 +1094,9 @@ local function getTrisToRaster()
 
     -- Then use projected vertices to construct and 
     for i = 1, loadedMesh.triCount do
+
+        -- Timing point start
+        projectionStart = GetCPUTime()
 
         -- If triangle has a lazy culling index over 0, skip projection and decrement its index
         if loadedMesh.lbfc[i] > 0 then
@@ -1115,7 +1121,13 @@ local function getTrisToRaster()
 
         -- If back-facing, then skip rendering
         local normalToCamera = vectorDotProduct(normal, vCameraRay)
+
+        -- Timing point end
+        projectionCumulative = projectionCumulative + (GetCPUTime() - projectionStart)
         if normalToCamera < bfcThreshold then
+
+            -- Timing point start
+            projectionStart = GetCPUTime()
 
             -- Get amount of shade relative to light normal
             local lightDp = max(min(lightBias + vectorDotProduct(nLightDir, normal), 1), shadeMaximum)
@@ -1134,11 +1146,11 @@ local function getTrisToRaster()
                 {loadedMesh.tris[i][2][2][1], loadedMesh.tris[i][2][2][2], loadedMesh.tris[i][2][2][3]},
                 {loadedMesh.tris[i][2][3][1], loadedMesh.tris[i][2][3][2], loadedMesh.tris[i][2][3][3]}}
             })
-            projectionCumulative = projectionCumulative + (GetCPUTime() - projectionStart)
+            -- Timing point end
+            projectionCumulative = projectionCumulative + (GetCPUTime() - projectionStart) -- Timing point end
             for n = 1, clippedTris do
 
-                -- Since this loops, and each loop rasterizes a tri,
-                -- We need to measure projection more specifically
+                -- Timing point start
                 projectionStart = GetCPUTime()
 
                 -- Project triangles from 3D to 2D
@@ -1190,7 +1202,7 @@ local function getTrisToRaster()
                 clipped[n][4] = loadedMesh.tris[i][4]
                 clipped[n][5] = lightDp
 
-                -- Projection timing point end
+                -- Timing point end
                 projectionCumulative = projectionCumulative + (GetCPUTime() - projectionStart)
 
                 -- Send triangle to be viewport clipped and then rendered

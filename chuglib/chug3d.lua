@@ -140,6 +140,14 @@ local function Vec3D(x, y, z, w)
     return {x or 0, y or 0, z or 0, w or 1}
 end
 
+-- Triangle to store loaded mesh data
+-- Vert indices are saved instead of vert values
+-- TODO: Look into storing uv indices as well
+-- VertIndex, Uvs, Texture, Color, Lighting
+local function MemTriangle()
+    return {{0, 0, 0}, {{0, 0, 1}, {0, 1, 1}, {1, 1, 1}}, 1, 1, 1}
+end
+
 -- Triangle as an array, to save on memory
 -- Points, Uvs, Texture, Color, Lighting, Vert Index
 local function FastTriangle()
@@ -200,11 +208,11 @@ local function getMeshFromText(text)
                     end
                 end
                 -- Create triangle, get its vertex indices and uv coordiantes
-                local newTri = FastTriangle()
+                local newTri = MemTriangle()
+                newTri[1] =  {pointData[1], pointData[3], pointData[5]}
                 newTri[2] = {{uvs[pointData[2]][1], uvs[pointData[2]][2], 1},
                              {uvs[pointData[4]][1], uvs[pointData[4]][2], 1},
                              {uvs[pointData[6]][1], uvs[pointData[6]][2], 1}}
-                newTri[6] =  {pointData[1], pointData[3], pointData[5]}
                 TInsert(tris, newTri)
             end
         end
@@ -254,11 +262,11 @@ local function getMeshFromFile(filename)
                     end
                 end
                 -- Create triangle, get its vertex indices and uv coordiantes
-                local newTri = FastTriangle()
+                local newTri = MemTriangle()
+                newTri[1] =  {pointData[1], pointData[3], pointData[5]}
                 newTri[2] = {{uvs[pointData[2]][1], uvs[pointData[2]][2], 1},
                              {uvs[pointData[4]][1], uvs[pointData[4]][2], 1},
                              {uvs[pointData[6]][1], uvs[pointData[6]][2], 1}}
-                newTri[6] =  {pointData[1], pointData[3], pointData[5]}
                 TInsert(tris, newTri)
 
             elseif parts == 2 then
@@ -272,17 +280,17 @@ local function getMeshFromFile(filename)
                 end
 
                 -- Create triangle, get its vertex indices and uv coordiantes
-                local newTri = FastTriangle()
+                local newTri = MemTriangle()
+                newTri[1] =  {pointData[1], pointData[4], pointData[7]}
                 newTri[2] = {{uvs[pointData[2]][1], uvs[pointData[2]][2], 1},
                              {uvs[pointData[5]][1], uvs[pointData[5]][2], 1},
                              {uvs[pointData[8]][1], uvs[pointData[8]][2], 1}}
-                newTri[6] =  {pointData[1], pointData[4], pointData[7]}
                 TInsert(tris, newTri)
 
             -- Otherwise, just grab the verts
             else
-                local newTri = FastTriangle()
-                newTri[6] = {tonumber(data[2]), tonumber(data[3]), tonumber(data[4])}
+                local newTri = MemTriangle()
+                newTri[1] = {tonumber(data[2]), tonumber(data[3]), tonumber(data[4])}
                 TInsert(tris, newTri)
             end
         end
@@ -1109,15 +1117,15 @@ local function getTrisToRaster()
         local normal, line1, line2 = {0, 0, 0}, {0, 0, 0}, {0, 0, 0}
 
         -- Get lines either side of triangle
-        line1 = vectorSub(loadedMesh.pVert[loadedMesh.tris[i][6][2]], loadedMesh.pVert[loadedMesh.tris[i][6][1]])
-        line2 = vectorSub(loadedMesh.pVert[loadedMesh.tris[i][6][3]], loadedMesh.pVert[loadedMesh.tris[i][6][1]])
+        line1 = vectorSub(loadedMesh.pVert[loadedMesh.tris[i][1][2]], loadedMesh.pVert[loadedMesh.tris[i][1][1]])
+        line2 = vectorSub(loadedMesh.pVert[loadedMesh.tris[i][1][3]], loadedMesh.pVert[loadedMesh.tris[i][1][1]])
 
         -- Get cross product of lines for triangle surface normal
         normal = vectorCrossProduct(line1, line2)
         normal = vectorNormalize(normal)
 
         -- Get ray from triangle to camera
-        local vCameraRay = vectorSub(loadedMesh.pVert[loadedMesh.tris[i][6][1]], vCamera)
+        local vCameraRay = vectorSub(loadedMesh.pVert[loadedMesh.tris[i][1][1]], vCamera)
 
         -- If back-facing, then skip rendering
         local normalToCamera = vectorDotProduct(normal, vCameraRay)
@@ -1139,9 +1147,9 @@ local function getTrisToRaster()
             local clippedTris
             local clipped = {{}, {}}
             clippedTris, clipped[1], clipped[2] = triClipPlane(nearPlane, nearNormal, {
-               {loadedMesh.vsVert[loadedMesh.tris[i][6][1]],
-                loadedMesh.vsVert[loadedMesh.tris[i][6][2]],
-                loadedMesh.vsVert[loadedMesh.tris[i][6][3]]},
+               {loadedMesh.vsVert[loadedMesh.tris[i][1][1]],
+                loadedMesh.vsVert[loadedMesh.tris[i][1][2]],
+                loadedMesh.vsVert[loadedMesh.tris[i][1][3]]},
                {{loadedMesh.tris[i][2][1][1], loadedMesh.tris[i][2][1][2], loadedMesh.tris[i][2][1][3]},
                 {loadedMesh.tris[i][2][2][1], loadedMesh.tris[i][2][2][2], loadedMesh.tris[i][2][2][3]},
                 {loadedMesh.tris[i][2][3][1], loadedMesh.tris[i][2][3][2], loadedMesh.tris[i][2][3][3]}}

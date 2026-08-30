@@ -583,12 +583,15 @@ local trisDrawnLast = 0
 
 local elapsedTime = 0.1
 local timeLast, nowTime = computer.uptime(), computer.uptime()
+
+-- Get elapsed time per-frame for mesh rotation, if needed
 local function updateElapsedTime()
     nowTime = computer.uptime()
     elapsedTime = nowTime - timeLast
     timeLast = nowTime
 end
 
+-- Load mesh from file and prepare it for rendering
 local function createMesh()
 
     -- Precalculate some commonly used variables
@@ -603,7 +606,6 @@ local function createMesh()
 
     -- Get default-cube if that's what we really want
     if modelFile == "default-cube" then
-
         loadedMesh.tris, loadedMesh.vert = getMeshFromText(defaultCubeOBJ)
 
     -- Otherwise, get model from specified model file, if it exists
@@ -671,7 +673,6 @@ end
 
 -- TODO: Something is wrong here. FIX: u, v = v, u; u = 1 - u
 -- TODO: Move to chugraph
--- Return color from texture at position u, v (has issues)
 local function uvSampleTexture(u, v, texIndex)
     local texWidth = loadedTextures[texIndex].w
     local texHeight = loadedTextures[texIndex].h

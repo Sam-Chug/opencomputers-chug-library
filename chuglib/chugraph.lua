@@ -5,24 +5,25 @@ local _, ops = shell.parse(...)
 local computer = require("computer")
 local term = require("term")
 
-local version = "0.3.1a"
+local version = "0.3.2a"
 
--- Functional resolution of the screen
-local funcWidth = 0
-local funcHeight = 0
+local funcWidth, funcHeight = 0, 0
+local gpu, buffer, screenWidth, screenHeight
 
-local gpu, buffer
-local screenWidth, screenHeight
-
-local topHalfBlock = "▀"; local bottomHalfBlock = "▄"; local fullBlock = "█"
+local charBlockT, charBlockB, charBlockF = "▀", "▄", "█"
 local inverseChars = {["▀"] = "▄", ["▄"] = "▀", ["█"] = " ", [" "] = "█"}
-local currentForeground = -1; local currentBackground = -1
+local currentForeground, currentBackground = -1, -1
 local sceneBGColor = 0x000000
 
+-- Screen buffer arrays
 local colorBuffer = {}
 local charBuffer = {}
 local drawBuffer = {}
 
+-- Color look up tables
+local hexLUT, colLUT = {}, {}
+
+-- Debug crap
 local debugMode = false
 local debugDrawWhiteLines = false
 local debugDrawColorLines = false
@@ -39,31 +40,16 @@ local gpuUsageStats = {
     cpuTimeTotal = 0, frameTimeTotal = 0, usedMemTotal = 0, gpuUsageTotal = 0
 }
 
-local TableInsert = table.insert; local Sub = string.sub; local GetByte = string.byte; local StringFormat = string.format
-local Modulo = math.fmod; local Abs = math.abs; local Min = math.min; local Max = math.max
+local TableInsert = table.insert
+local Sub, GetByte, StringFormat = string.sub, string.byte, string.format
+local Modulo, Abs, Min, Max = math.fmod, math.abs, math.min, math.max
 local GPUAllocateBuffer, GPUSetActiveBuffer, GPUFreeBuffer, GPUFreeAllBuffers
 local GPUGetRes, GPUSetFG, GPUSetBG
 local GPUSet, GPUFill, GPUBitBlt
 
--- Get hex value from color index
-local hexLUT = {}
-
--- Get color index from hex color
-local colLUT = {}
-
--- BUGS =======================================================
-
-
-
--- TODO OPTIMIZATIONS =========================================
--- Reduce memory usage (always and forever)
-
-
--- TODO ==============================================
--- Move demo to separate file
-
-
--- GET/SET PIXEL DATA =========================================
+-- ============================================================
+-- GET/SET PIXEL DATA
+-- ============================================================
 
 -- TODO: Merge with GetPixel()
 local function unpackPixel(x, y)
@@ -119,7 +105,9 @@ local function resetUpdateForRegion(x, y, width, height)
     end
 end
 
--- GPU DRAWING ================================================
+-- ============================================================
+-- GPU DRAWING
+-- ============================================================
 
 local function bitblt()
     GPUBitBlt(0, 1, 1, screenWidth, screenHeight, buffer, 1, 1)
@@ -166,68 +154,51 @@ end
 
 -- Check if pixel requires a redraw, also checks for other screen res modes
 local function needsUpdate(x, y)
-
     if getPixelUpdateState(x, y) then return true end
     if getPixelUpdateState(x, y + 1) then return true end
     return false
 end
 
--- Return inverse character based on current screen res mode
-local function getInverseChar(char)
-    if char == topHalfBlock then
-        return bottomHalfBlock
-    elseif char == bottomHalfBlock then
-        return topHalfBlock
-    elseif char == fullBlock then
-        return " "
-    elseif char == " " then
-        return fullBlock
-    end
-    return char
-end
-
 -- Use real-screen coordinates to return compiled pixel data based on the set drawing mode
 local function returnPixelData(x, y)
 
-    -- If text, return letter and fore/back color
+    -- Get char of pixel
     local char = getPixelChar(x, y)
-    if char ~= nil then
-        return getPixelForeColor(x, y), getPixelBackColor(x, y), char, true
 
-    -- Else, this is a filled pixel so return back color
-    else
+    -- If char unset, return pixel data
+    if char == nil then
+
         -- Get top and bottom colors
         local fore = getPixelForeColor(x, y)
         local downFore = getPixelForeColor(x, y + 1)
+
         if fore == downFore then
             -- same color, send full block
-            return fore, downFore, fullBlock, false
+            return fore, downFore, charBlockF, false
         else
             -- different color, send half block
-            return fore, downFore, topHalfBlock, false
+            return fore, downFore, charBlockT, false
         end
+    -- Else, return char with pixel data
+    else
+        return getPixelForeColor(x, y), getPixelBackColor(x, y), char, true
     end
 end
 
 -- Loop through screenBuffer and draw pixels that were changed this frame
 local function DrawFrame()
-    local xInc = 1; local yInc = 2
-
-    -- Holder variables
-    local xSkipIndex = 0
-    local drawGroup = {}
 
     -- Cache variables before iterating
-    local fillGroup = {}
+    local xInc, yInc = 1, 2
+    local xSkipIndex = 0
+    local fillGroup, drawGroup = {}, {}
     local twoColCheck = false
     local startFore, startBack, startChar, startText = 0, 0, " ", false
     local newFore, newBack, newChar, newText = 0, 0, " ", false
-    local checkLen = 0
-    local indexTop = 0
-    local indexBot = 0
+    local checkLen, indexTop, indexBot = 0, 0, 0
 
     for y = 1, funcHeight, yInc do -- For each line,
-        for x = 1, funcWidth, xInc do -- Run each pixel 
+        for x = 1, funcWidth, xInc do -- Run each pixel,
             if x + xSkipIndex > funcWidth then goto skipx end
 
             -- If pixel doesn't require update, skip
@@ -261,40 +232,20 @@ local function DrawFrame()
                 if startText ~= newText then break end
 
                 -- If new fore/back are the same
-                -- TODO: Shuffling these around based on ideal usage may increase performance
-                if newFore == newBack then
+                if newFore ~= newBack then
+
+                    -- New and original match exactly, insert returned char
+                    if fillGroup[3] == newFore and fillGroup[4] == newBack then
+                        TableInsert(charString, newChar)
+                        charsAdded = charsAdded + 1
+
+                    -- New and original match but are inverted, return inverted char
+                    elseif fillGroup[3] == newBack and fillGroup[4] == newFore then
+                        TableInsert(charString, inverseChars[newChar])
+                        charsAdded = charsAdded + 1
 
                     -- If original fore/back are the same
-                    if fillGroup[3] == fillGroup[4] then
-
-                        -- If new colors equal to original, insert returned char
-                        if newFore == fillGroup[3] then
-                            TableInsert(charString, newChar)
-                            charsAdded = charsAdded + 1
-                        -- Otherwise, return inversed char, and set new color to original back
-                        else
-                            TableInsert(charString, inverseChars[newChar])
-                            charsAdded = charsAdded + 1
-                            fillGroup[4] = newBack
-                        end
-
-                    -- If original fore/back are not the same
-                    elseif fillGroup[3] ~= fillGroup[4] then
-
-                        -- If new fore and original fore match, insert returned char
-                        if fillGroup[3] == newFore then
-                            TableInsert(charString, newChar)
-                            charsAdded = charsAdded + 1
-                        -- If new fore and original back match, insert inverted char
-                        elseif fillGroup[4] == newFore then
-                            TableInsert(charString, inverseChars[newChar])
-                            charsAdded = charsAdded + 1
-                        end
-                    end
-                -- If new fore/back are not the same
-                else
-                    -- If original fore/back are the same
-                    if fillGroup[3] == fillGroup[4] then
+                    elseif fillGroup[3] == fillGroup[4] then
 
                         -- If new fore matches original fore, insert returned char and set original back to new fore
                         if newFore == fillGroup[3] then
@@ -307,22 +258,44 @@ local function DrawFrame()
                             charsAdded = charsAdded + 1
                             fillGroup[4] = newFore
                         end
-
-                    -- New and original match exactly, insert returned char
-                    elseif fillGroup[3] == newFore and fillGroup[4] == newBack then
-                        TableInsert(charString, newChar)
-                        charsAdded = charsAdded + 1
-
-                    -- New and original match but are inverted, return inverted char
-                    elseif fillGroup[3] == newBack and fillGroup[4] == newFore then
-                        TableInsert(charString, inverseChars[newChar])
-                        charsAdded = charsAdded + 1
                     else break end
+
+                -- If new fore/back are not the same
+                else
+
+                    -- If original fore/back are not the same
+                    if fillGroup[3] ~= fillGroup[4] then
+
+                        -- If new fore and original fore match, insert returned char
+                        if fillGroup[3] == newFore then
+                            TableInsert(charString, newChar)
+                            charsAdded = charsAdded + 1
+                        -- If new fore and original back match, insert inverted char
+                        elseif fillGroup[4] == newFore then
+                            TableInsert(charString, inverseChars[newChar])
+                            charsAdded = charsAdded + 1
+                        end
+
+                    -- If original fore/back are the same
+                    elseif fillGroup[3] == fillGroup[4] then
+
+                        -- If new colors equal to original, insert returned char
+                        if newFore == fillGroup[3] then
+                            TableInsert(charString, newChar)
+                            charsAdded = charsAdded + 1
+                        -- Otherwise, return inversed char, and set new color to original back
+                        else
+                            TableInsert(charString, inverseChars[newChar])
+                            charsAdded = charsAdded + 1
+                            fillGroup[4] = newBack
+                        end
+                    end
                 end
 
                 -- If no new chars added to draw string, exit loop
                 if charsAdded == checkLen then
                     break
+
                 -- Else, pixel is ready to draw and no longer requires updating
                 else
                     drawBuffer[indexTop + 1] = false
@@ -367,21 +340,18 @@ local function DrawFrame()
     drawGroup = nil
 end
 
--- GET/SET ====================================================
+-- ============================================================
+-- GET/SET
+-- ============================================================
 
 -- Set index to input pixel data
 local function addToFrameBuffer(x, y, foreColor, backColor, char)
 
     x = x // 1; y = y // 1
-    -- TODO: See how necessary this is, 1D array should allow for flaws
     if x < 1 or x > funcWidth or y < 1 or y > funcHeight then return end
 
-    -- If char specified, set char
-    -- Otherwise is pixel, so set empty space
+    -- Set pixel data from function args
     packPixel(x, y, foreColor, backColor, char)
-
-    ::skipAddData::
-    foreColor, backColor = nil, nil
 end
 
 -- Set index and consecutive indices to string pixel data
@@ -399,7 +369,6 @@ local function textToFrameBuffer(x, y, foreColor, backColor, text, vertical)
             addToFrameBuffer(x, y + i - 1, foreColor, backColor, Sub(text, i, i))
         end
     end
-    foreColor, backColor, text = nil, nil, nil
 end
 
 -- Fill area on screen with specified color and char
@@ -410,18 +379,16 @@ local function Fill(x, y, width, height, foreColor, backColor)
             addToFrameBuffer(i, j, foreColor, backColor)
         end
     end
-    foreColor, backColor = nil, nil
 end
 
 -- Clear region, send straight to gpu command, then loop and reset updates
 local function ClearRegion(x, y, width, height)
 
     -- TODO: Handle fractional pixel clears, clear basic-sized pixel here and send fractionals to update regularly
-    local widthFixed = width; local heightFixed = (height // 2) + 1
-    local xFixed = x; local yFixed = (y // 2) + 1
+    local widthFixed, heightFixed = width, (height // 2) + 1
+    local xFixed, yFixed = x, (y // 2) + 1
 
     resetUpdateForRegion(x, y, width, height)
-
     setForeground(sceneBGColor); setBackground(sceneBGColor)
     GPUFill(xFixed, yFixed, widthFixed, heightFixed, " ")
     gpuUsageStats.fill = gpuUsageStats.fill + 1
@@ -432,8 +399,8 @@ local function ClearScreen()
 end
 
 -- Return pixel data
+-- TODO: This probably doesn't work after changing how chars are stored
 local function GetPixel(x, y)
-    -- TODO: This probably doesn't work after changing how chars are stored
     local fore, back, char = unpackPixel(x, y)
     return char or nil, fore, back
 end
@@ -449,7 +416,6 @@ end
 
 local function SetPixel(x, y, color)
     addToFrameBuffer(x, y, color)
-    color = nil
 end
 
 local function GetAspectRatio()
@@ -468,7 +434,9 @@ local function SetSceneBackground(color)
     sceneBGColor = color
 end
 
--- COLOR ======================================================
+-- ============================================================
+-- COLOR
+-- ============================================================
 
 -- Return nearest valid hex color from input RGB values (0 - 1)
 local function ValidHexFromRGB(r, g, b)
@@ -597,7 +565,9 @@ local function createColorLUTs()
     end
 end
 
--- MATH =======================================================
+-- ============================================================
+-- MATH
+-- ============================================================
 
 local function drawLineLow(x1, y1, x2, y2, color)
 
@@ -648,8 +618,10 @@ end
 
 -- Draw line from one point to the other
 local function DrawLine(x1, y1, x2, y2, color)
+
     x1 = x1 // 1; y1 = y1 // 1
     x2 = x2 // 1; y2 = y2 // 1
+
     if Abs(y2 - y1) < Abs(x2 - x1) then
         if x1 > x2 then drawLineLow(x2, y2, x1, y1, color)
         else drawLineLow(x1, y1, x2, y2, color) end
@@ -733,7 +705,9 @@ local function FillTriangle(tri, color)
     end
 end
 
--- DEBUG ======================================================
+-- ============================================================
+-- DEBUG
+-- ============================================================
 
 -- Memory
 local memDiv = 1024 -- Measuring KB
@@ -757,8 +731,8 @@ end
 
 -- Write debug stats to graphcis buffer
 local function drawDebug()
-    -- Timing Test Bench: https://onecompiler.com/lua/44zp873h2
 
+    -- Timing Test Bench: https://onecompiler.com/lua/44zp873h2
     -- Log cpu usage time and the time since last frame shown (50ms is optimal)
     local averageCpuTime = gpuUsageStats.cpuTimeTotal / debugTimeCycles
     local averageFrameTime = gpuUsageStats.frameTimeTotal // debugTimeCycles
@@ -833,34 +807,32 @@ local function takeDebugMeasurements()
     gpuUsageStats.cpuTimeTotal = gpuUsageStats.cpuTimeTotal + cpuTimeDiff
     local frameTimeDiff = math.ceil((gpuUsageStats.frameTime - gpuUsageStats.lastFrameTime) * 1000)
     gpuUsageStats.frameTimeTotal = gpuUsageStats.frameTimeTotal + frameTimeDiff
-
 end
 
--- PUSH TO SCREEN =================================
+-- ============================================================
+-- PUSH TO SCREEN
+-- ============================================================
 
 -- Blit gpu buffer to screen
 local function UpdateScreen()
     if debugMode then drawDebug() end
     DrawFrame()
     bitblt()
-
     takeDebugMeasurements()
 end
 
--- DEMO ===========================================
-
--- TODO: Make separate demo functions and loop them by pressing some key
--- Draw a random line inside rect
-local random = math.random
-
+-- ============================================================
+-- DEMO
+-- ============================================================
 
 createColorLUTs()
+local random = math.random
 local function drawDemoGraphics(x, y, width, height)
 
-    -- TODO right-most + bottom-most side is not being cleared
-    -- Either ClearRegion() isnt built correctly or DrawLine is drawing longer than it should
+    -- TODO: Make separate demo functions and loop them by pressing some key
     ClearScreen()
 
+    -- Run a gpu function n times
     if debugDoBenchmark then
         -- set = 3000
         -- setFG, setBG = 2600
@@ -871,6 +843,7 @@ local function drawDemoGraphics(x, y, width, height)
         end
     end
 
+    -- Draw 350 random white lines
     if debugDrawWhiteLines then
         for i = 1, 50 do
             DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
@@ -883,6 +856,7 @@ local function drawDemoGraphics(x, y, width, height)
         end
     end
 
+    -- Draw 350 random colored lines
     if debugDrawColorLines then
         for i = 1, 50 do
             DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFF0000)
@@ -895,6 +869,8 @@ local function drawDemoGraphics(x, y, width, height)
         end
     end
 
+    -- Draw all available colors in a neat grid matching the gpu's documentation page
+    -- Just here to make sure the LUT's are working correclty
     if debugTestColorLUTs then
         for i = 1, 256 do
             local xPos = Modulo((i - 1), 40)
@@ -911,11 +887,13 @@ local function drawDemoGraphics(x, y, width, height)
     end
 end
 
+-- Allocate and set active screen buffer
 local function setBuffer(width, height)
     buffer = GPUAllocateBuffer(width, height)
     GPUSetActiveBuffer(buffer)
 end
 
+-- Free all buffers
 local function FreeAllBuffers()
     ClearScreen()
     GPUFreeBuffer(buffer)
@@ -985,9 +963,11 @@ local function demoGraphics()
     end
 end
 
--- CL OPTIONS =================================================
+-- ============================================================
+-- CL OPTIONS
+-- ============================================================
 
--- set arguments upon startup
+-- Set arguments upon startup
 local function setVariables()
     if ops.w then debugDrawWhiteLines = true end
     if ops.c then debugDrawColorLines = true end
@@ -999,11 +979,8 @@ local function setVariables()
     if ops.d then demoGraphics() end
 end
 setVariables()
--- demoGraphics()
 
--- CREDITS
 print("Rendered with Chugraph " .. version)
-
 return {
     SetMainGPU = SetMainGPU,
     ResetToCommandLine = ResetToCommandLine,

@@ -2,7 +2,7 @@ local component = require("component")
 local shell = require("shell")
 local _, ops = shell.parse(...)
 local computer = require("computer")
-local version = "0.1.0a"
+local version = "0.2.0a"
 
 -- ============================================================
 -- CREDITS
@@ -33,24 +33,24 @@ local doModelRotateZ = false
 local doModelRotateY = false
 
 local doDrawTextured = true
-local doDrawFlatShaded = false -- Not yet implemented
+local doDrawFlatShaded = false              -- Not yet implemented
 local doDrawWireframe = false
 local doDepthBlending = false
 
-local backgroundColor = 0x00DBFF
-local depthFadeDist = 0.4 -- 
-local bfcThreshold = 0.0 -- Cull any face whos dot product against camera normal is above this
-local bfcLazyThreshold = 0.8 -- Lazy backface culling threshold. Faces turned this far away should be lazy occluded
-local lightDirection = {0.1, 0.1, -1} -- [Sunlight-ish](0.3, 1, 0) | [Topdown-ish](0.1, 0.1, -1)
-local shadeMaximum = 5 / 16 -- Maximum darkness in the most shaded areas
-local lightBias = 0.3 -- Softens faces that are 90 degrees offset to light direction
-local fNear = 0.25
-local fFar = 1000
-local fFov = 90
+local backgroundColor = 0x00DBFF            -- Color of the background in the scene
+local depthFadeDist = 0.4                   -- Depth value gets squared by this value when blending colors into the background
+local bfcThreshold = 0.0                    -- Cull any face whos dot product against camera normal is above this
+local bfcLazyThreshold = 0.8                -- Lazy backface culling threshold. Faces turned this far away should be lazy occluded
+local lightDirection = {0.1, 0.1, -1}       -- [Sunlight-ish](0.3, 1, 0) | [Topdown-ish](0.1, 0.1, -1)
+local shadeMaximum = 5 / 16                 -- Maximum darkness in the most shaded areas
+local lightBias = 0.3                       -- Softens faces that are 90 degrees offset to light direction
+local fNear = 0.25                          -- Near plane distance
+local fFar = 1000                           -- Far plane distance
+local fFov = 90                             -- Field of view
 
 local modelFile = "teapot.obj"
 
-local function setVariables()
+local function setArguments()
     -- load model from input filename
     if ops.model ~= nil then
         if string.find(ops.model, ".obj") == nil then
@@ -77,7 +77,7 @@ local function setVariables()
     end
     if ops.w then doDrawWireframe = true end
 end
-setVariables()
+setArguments()
 
 -- ============================================================
 -- LUA NONSENSE
@@ -95,31 +95,12 @@ local GetGreyscaleColor = gpu.GetGreyscaleColor; local GetShadedColor = gpu.GetS
 local BlendColor = gpu.BlendColor
 
 local TInsert = table.insert; local TRemove = table.remove
-local vertCount = 0
 
 -- ============================================================
 -- TEXTURES (Move to chugraph?)
 -- ============================================================
 
--- local missingTex = {
---     {0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D},
---     {0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C},
---     {0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0},
---     {0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF},
---     {0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D},
---     {0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C},
---     {0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0},
---     {0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF},
---     {0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D},
---     {0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C},
---     {0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0},
---     {0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF},
---     {0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D},
---     {0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C},
---     {0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0, 0x1E1E1E, 0x2D2D2D, 0xCC00C0, 0xFF00C0},
---     {0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF, 0x2D2D2D, 0x3C3C3C, 0xFF00C0, 0xFF00FF},
--- }
-
+-- Default texture
 local missingTex = {
     {0xFF00FF, 0x2D2D2D, 0xFF00FF, 0x2D2D2D},
     {0x2D2D2D, 0xFF00FF, 0x2D2D2D, 0xFF00FF},
@@ -127,37 +108,8 @@ local missingTex = {
     {0x2D2D2D, 0xFF00FF, 0x2D2D2D, 0xFF00FF},
 }
 
-local grassSide = { -- Grass block side
-    {0x33B640, 0x009200, 0x339240, 0x009200, 0x33B640, 0x009200, 0x339240, 0x339240},
-    {0x009200, 0x33B640, 0x339240, 0x339240, 0x009200, 0x339240, 0x009200, 0x339240},
-    {0x339240, 0x339240, 0x009200, 0x664900, 0x339240, 0x339240, 0x664900, 0x009200},
-    {0x664940, 0x009200, 0x664900, 0x664900, 0x339240, 0x664940, 0x664940, 0x664940},
-    {0x664900, 0x664940, 0x787878, 0x664940, 0x664900, 0x664900, 0x664940, 0x664900},
-    {0x664940, 0x994900, 0x994900, 0x664940, 0x664940, 0x664940, 0x994900, 0x787878},
-    {0x664940, 0x664940, 0x664940, 0x664900, 0x664940, 0x994900, 0x664940, 0x664940},
-    {0x664940, 0x664900, 0x664900, 0x787878, 0x664940, 0x664940, 0x664900, 0x664940}
-}
-local grassTop = { -- Grass block side
-    {0x33B640, 0x009200, 0x009200, 0x009200, 0x33B640, 0x33B640, 0x339240, 0x009200},
-    {0x009200, 0x33B640, 0x33B640, 0x339240, 0x009200, 0x339240, 0x009200, 0x33B640},
-    {0x33B640, 0x009200, 0x339240, 0x009200, 0x33B640, 0x009200, 0x009200, 0x009200},
-    {0x339240, 0x33B640, 0x009200, 0x009200, 0x33B640, 0x339240, 0x33B640, 0x339240},
-    {0x33B640, 0x009200, 0x339240, 0x33B640, 0x339240, 0x009200, 0x339240, 0x009200},
-    {0x009200, 0x33B640, 0x009200, 0x339240, 0x009200, 0x339240, 0x009200, 0x33B640},
-    {0x33B640, 0x339240, 0x009200, 0x009200, 0x33B640, 0x33B640, 0x339240, 0x339240},
-    {0x009200, 0x33B640, 0x339240, 0x339240, 0x009200, 0x339240, 0x009200, 0x339240}
-}
-local grassBottom = { -- Grass block side
-    {0x664900, 0x664940, 0x787878, 0x664940, 0x664900, 0x664900, 0x664940, 0x664900},
-    {0x664940, 0x994900, 0x994900, 0x664940, 0x664940, 0x664940, 0x994900, 0x787878},
-    {0x664940, 0x664940, 0x664940, 0x664900, 0x664940, 0x994900, 0x664940, 0x664940},
-    {0x664940, 0x664900, 0x664900, 0x787878, 0x664940, 0x664940, 0x664900, 0x664940},
-    {0x664900, 0x664940, 0x787878, 0x664940, 0x664900, 0x664900, 0x664940, 0x664900},
-    {0x664940, 0x994900, 0x994900, 0x664940, 0x664940, 0x664940, 0x994900, 0x787878},
-    {0x664940, 0x664940, 0x664940, 0x664900, 0x664940, 0x994900, 0x664940, 0x664940},
-    {0x664940, 0x664900, 0x664900, 0x787878, 0x664940, 0x664940, 0x664900, 0x664940}
-}
-
+-- TODO: This table should hold all loaded texture data associated with an .obj
+-- Triangles should get a texture index, which will refer to an index in this table
 local loadedTextures = {{name = "missingTex", w = #missingTex, h = #missingTex[1], tex = missingTex}}
 
 -- ============================================================
@@ -168,11 +120,6 @@ local loadedTextures = {{name = "missingTex", w = #missingTex, h = #missingTex[1
 -- Vec2D ---- Array -> [u] [v] [w]
 -- Vec3D ---- Array -> [x] [y] [z] [w]
 
--- TODO: Potential optimization ->
--- Triangle - Array -> [3 Points[Vec3D]] [3 UVs[Vec2D]] [Tex] [Col] [Lighting Value]
--- This was tried and benchmarked for a ~3% cpu performance boost
--- I don't mind making the code harder to read but the resulting madness is not worth that small of an improvement
-
 local function Vec2D(u, v, w)
     return {u or 0, v or 0, w or 1}
 end
@@ -182,8 +129,9 @@ local function Vec3D(x, y, z, w)
 end
 
 -- Triangle as an array, to save on memory
+-- Points, Uvs, Texture, Color, Lighting, Vert Index
 local function FastTriangle()
-    return {{{0, 0, 0, 1}, {0, 0, 0, 1}, {0, 0, 0, 1}}, {{0, 0, 1}, {0, 0, 1}, {0, 0, 1}}, 1, 1, 1}
+    return {{{0, 0, 0, 1}, {0, 0, 0, 1}, {0, 0, 0, 1}}, {{0, 0, 1}, {0, 1, 1}, {1, 1, 1}}, 1, 1, 1, {0, 0, 0}}
 end
 
 -- Triangle with KV pairs
@@ -203,6 +151,7 @@ local function Triangle(vec1, vec2, vec3, uv1, uv2, uv3, texName)
     -- ::addtri::
 
     return {
+        pi = {0, 0, 0},
         p = {vec1 or {0, 0, 0, 1}, vec2 or {0, 0, 0, 1}, vec3 or {0, 0, 0, 1}}, -- Points
         t = {uv1 or {0, 0, 1}, uv2 or {0, 1, 1}, uv3 or {1, 1, 1}},             -- Texture Coordinates
         tex = 1,                                                                -- Texture index (in loadedTextures)
@@ -221,94 +170,96 @@ local function Mat4x4()
 end
 
 -- ============================================================
--- MESH PARSING
+-- .OBJ MESH LOADING
 -- ============================================================
 
--- Load .obj from file at filenam, parse vertex/face data and build a list of triangles from it 
-local function getMeshFromFile(filename)
+local function fileExists(filename)
     local f = io.open(filename, "r")
     if f then
         f:close()
-        local verts = {}
-        local tris = {}
-        local uvs = {}
-        for line in io.lines(filename) do
-            local data = {}
-            for item in line:gmatch("%S+") do
-                TInsert(data, item)
-            end
-            if data == nil or data[1] == nil then goto continue end
+        return true
+    end
+    return false
+end
 
-            -- Vertex position
-            if data[1] == "v" then
-                TInsert(verts, {tonumber(data[2]), tonumber(data[3]), tonumber(data[4]), 1})
-
-            -- TODO: Vertex normals, could do shading eventually
-            elseif data[1] == "vn" then
-                -- Do nothing... for now....
-
-            -- UVs
-            elseif data[1] == "vt" then
-                TInsert(uvs, Vec2D(tonumber(data[2]), tonumber(data[3])))
-
-            -- Face data
-            elseif data[1] == "f" then
-
-                -- Check if face data packs other information inside
-                local _, parts = data[2]:gsub("/", "")
-
-                -- If more information than points given, then parse it
-                if parts == 1 then
-
-                    local pointData = {}
-                    for i = 1, 3 do
-                        for item in data[1 + i]:gmatch("%d+") do
-                            TInsert(pointData, tonumber(item))
-                        end
-                    end
-
-                    TInsert(tris, Triangle(
-                        {verts[pointData[1]][1], verts[pointData[1]][2], verts[pointData[1]][3], 1},
-                        {verts[pointData[3]][1], verts[pointData[3]][2], verts[pointData[3]][3], 1},
-                        {verts[pointData[5]][1], verts[pointData[5]][2], verts[pointData[5]][3], 1},
-                        {uvs[pointData[2]][1], uvs[pointData[2]][2], 1},
-                        {uvs[pointData[4]][1], uvs[pointData[4]][2], 1},
-                        {uvs[pointData[6]][1], uvs[pointData[6]][2], 1}
-                    ))
-
-                elseif parts == 2 then
-                    -- vert/uv/vnormal
-
-                    local pointData = {}
-                    for i = 1, 3 do
-                        for item in data[1 + i]:gmatch("%d+") do
-                            TInsert(pointData, tonumber(item))
-                        end
-                    end
-
-                    TInsert(tris, Triangle(
-                        {verts[pointData[1]][1], verts[pointData[1]][2], verts[pointData[1]][3], 1},
-                        {verts[pointData[4]][1], verts[pointData[4]][2], verts[pointData[4]][3], 1},
-                        {verts[pointData[7]][1], verts[pointData[7]][2], verts[pointData[7]][3], 1},
-                        {uvs[pointData[2]][1], uvs[pointData[2]][2], 1},
-                        {uvs[pointData[5]][1], uvs[pointData[5]][2], 1},
-                        {uvs[pointData[8]][1], uvs[pointData[8]][2], 1}
-                    ))
-
-                -- Otherwise, just grab the verts
-                else
-                    TInsert(tris, Triangle(
-                        {verts[tonumber(data[2])][1], verts[tonumber(data[2])][2], verts[tonumber(data[2])][3], 1},
-                        {verts[tonumber(data[3])][1], verts[tonumber(data[3])][2], verts[tonumber(data[3])][3], 1},
-                        {verts[tonumber(data[4])][1], verts[tonumber(data[4])][2], verts[tonumber(data[4])][3], 1}
-                    ))
-                end
-            end
-            ::continue::
+-- Load .obj from file at filenam, parse vertex/face data and build a list of triangles from it 
+local function getMeshFromFile(filename)
+    local tris = {}
+    local verts = {}
+    local uvs = {}
+    for line in io.lines(filename) do
+        local data = {}
+        for item in line:gmatch("%S+") do
+            TInsert(data, item)
         end
-        vertCount = #verts
-        return tris
-    else return false end
+        if data == nil or data[1] == nil then goto continue end
+
+        -- Vertex position
+        if data[1] == "v" then
+            TInsert(verts, {tonumber(data[2]), tonumber(data[3]), tonumber(data[4]), 1})
+
+        -- TODO: Vertex normals, could do shading eventually
+        elseif data[1] == "vn" then
+            -- Do nothing... for now....
+
+        -- UVs
+        elseif data[1] == "vt" then
+            TInsert(uvs, Vec2D(tonumber(data[2]), tonumber(data[3])))
+
+        -- Face data
+        elseif data[1] == "f" then
+
+            -- Check if face data packs other information inside
+            local _, parts = data[2]:gsub("/", "")
+
+            -- If more information than points given, then parse it
+            if parts == 1 then
+
+                local pointData = {}
+                for i = 1, 3 do
+                    for item in data[1 + i]:gmatch("%d+") do
+                        TInsert(pointData, tonumber(item))
+                    end
+                end
+                -- Create triangle, get its vertex indices and uv coordiantes
+                local newTri = FastTriangle()
+                newTri[2] = {{uvs[pointData[2]][1], uvs[pointData[2]][2], 1},
+                             {uvs[pointData[4]][1], uvs[pointData[4]][2], 1},
+                             {uvs[pointData[6]][1], uvs[pointData[6]][2], 1}}
+                newTri[6] =  {pointData[1], pointData[3], pointData[5]}
+                TInsert(tris, newTri)
+
+            elseif parts == 2 then
+                -- vert/uv/vnormal
+
+                local pointData = {}
+                for i = 1, 3 do
+                    for item in data[1 + i]:gmatch("%d+") do
+                        TInsert(pointData, tonumber(item))
+                    end
+                end
+
+                -- Create triangle, get its vertex indices and uv coordiantes
+                local newTri = FastTriangle()
+                newTri[2] = {{uvs[pointData[2]][1], uvs[pointData[2]][2], 1},
+                             {uvs[pointData[5]][1], uvs[pointData[5]][2], 1},
+                             {uvs[pointData[8]][1], uvs[pointData[8]][2], 1}}
+                newTri[6] =  {pointData[1], pointData[4], pointData[7]}
+                TInsert(tris, newTri)
+
+            -- Otherwise, just grab the verts
+            else
+                local newTri = FastTriangle()
+                newTri[6] = {tonumber(data[2]), tonumber(data[3]), tonumber(data[4])}
+                TInsert(tris, newTri)
+            end
+        end
+        data = nil
+        line = nil
+        ::continue::
+    end
+    uvs = nil
+    return tris, verts
 end
 
 -- ============================================================
@@ -367,101 +318,36 @@ local function vectorIntersectPlane(planeDP, ad, bd, lineStart, lineEnd)
     local t = (planeDP - ad) / (bd - ad)
     local lineStartToEnd = vectorSub(lineEnd, lineStart)
     local lineToIntersect = vectorMul(lineStartToEnd, t)
+
+    lineStartToEnd = nil
     return vectorAdd(lineStart, lineToIntersect), t
 end
 
--- Original function, for reference
--- This is only called in one function, so things can be simplified quite a bit
--- local function vectorIntersectPlane(planeP, inPlaneN, lineStart, lineEnd)
---     local planeN = vectorNormalize(inPlaneN)
---     local planeD = vectorDotProduct(planeN, planeP)
---     local ad = vectorDotProduct(lineStart, planeN)
---     local bd = vectorDotProduct(lineEnd, planeN)
---     local t = (planeD - ad) / (bd - ad)
---     local lineStartToEnd = vectorSub(lineEnd, lineStart)
---     local lineToIntersect = vectorMul(lineStartToEnd, t)
---     return vectorAdd(lineStart, lineToIntersect), t
--- end
-
--- #endregion
-
--- Return triangle from individual points
--- A quicker replacement of deepCopy that runs faster
--- TODO: This might suck too much even if it helps
-local function triFromArray(x1, y1, z1, x2, y2, z2, x3, y3, z3,
-                                           u1, v1, w1, u2, v2, w2, u3, v3, w3, tex, col, l)
-    return {
-        p = {{x1, y1, z1}, {x2, y2, z2}, {x3, y3, z3}},
-        t = {{u1, v1, w1}, {u2, v2, w2}, {u3, v3, w3}},
-        tex = tex,
-        col = col,
-        l = l
-    }
-end
-
-
-local insidePoints = {}; local nInsideP = 0
-local outsidePoints = {}; local nOutsideP = 0
-local insideTex = {}; local nInsideT = 0
-local outsideTex = {}; local nOutsideT = 0
+local insidePi = {0, 0, 0}; local outsidePi = {0, 0, 0}
+local insideTi = {0, 0, 0}; local outsideTi = {0, 0, 0}
 
 -- Test triangle against input plane
 -- Return clipped triangle(s) if triangle intersects plane
 local function triClipPlane(planeP, planeN, inTri)
-    -- local planeN = vectorNormalize(inPlaneN)
 
     local planeDP = vectorDotProduct(planeN, planeP)
     local function dist(p)
-        return (planeN[1] * p[1] + planeN[2] * p[2] + planeN[3] * p[3] - planeDP)
+        return planeN[1] * p[1] + planeN[2] * p[2] + planeN[3] * p[3] - planeDP
     end
 
-    insidePoints = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}; nInsideP = 0
-    outsidePoints = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}; nOutsideP = 0
-    insideTex = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}}; nInsideT = 0
-    outsideTex = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}}; nOutsideT = 0
-
-    local d0 = dist(inTri[1][1])
-    local d1 = dist(inTri[1][2])
-    local d2 = dist(inTri[1][3])
-
-    if d0 >= 0 then
-        nInsideP = nInsideP + 1
-        insidePoints[nInsideP] = inTri[1][1]
-
-        nInsideT = nInsideT + 1
-        insideTex[nInsideT] = inTri[2][1]
-    else
-        nOutsideP = nOutsideP + 1
-        outsidePoints[nOutsideP] = inTri[1][1]
-
-        nOutsideT = nOutsideT + 1
-        outsideTex[nOutsideT] = inTri[2][1]
-    end
-    if d1 >= 0 then
-        nInsideP = nInsideP + 1
-        insidePoints[nInsideP] = inTri[1][2]
-
-        nInsideT = nInsideT + 1
-        insideTex[nInsideT] = inTri[2][2]
-    else
-        nOutsideP = nOutsideP + 1
-        outsidePoints[nOutsideP] = inTri[1][2]
-
-        nOutsideT = nOutsideT + 1
-        outsideTex[nOutsideT] = inTri[2][2]
-    end
-    if d2 >= 0 then
-        nInsideP = nInsideP + 1
-        insidePoints[nInsideP] = inTri[1][3]
-
-        nInsideT = nInsideT + 1
-        insideTex[nInsideT] = inTri[2][3]
-    else
-        nOutsideP = nOutsideP + 1
-        outsidePoints[nOutsideP] = inTri[1][3]
-
-        nOutsideT = nOutsideT + 1
-        outsideTex[nOutsideT] = inTri[2][3]
+    -- Calculate if point lies inside or outside of the clipping plane
+    -- Save index of vertex in inTri instead of the entire vertex
+    local nInsideP = 0; local nOutsideP = 0
+    for i = 1, 3 do
+        if dist(inTri[1][i]) >= 0 then
+            nInsideP = nInsideP + 1
+            insidePi[nInsideP] = i
+            insideTi[nInsideP] = i
+        else
+            nOutsideP = nOutsideP + 1
+            outsidePi[nOutsideP] = i
+            outsideTi[nOutsideP] = i
+        end
     end
 
     -- All points outside plane, should not be drawn
@@ -478,29 +364,38 @@ local function triClipPlane(planeP, planeN, inTri)
         -- Triangle needs to be clipped, two points lie outside
         local outTri1 = {{{0, 0, 0, 1}, {0, 0, 0, 1}, {0, 0, 0, 1}}, {{0, 0, 1}, {0, 0, 1}, {0, 0, 1}}}
 
-        outTri1[1][1] = {insidePoints[1][1], insidePoints[1][2], insidePoints[1][3], insidePoints[1][4]}
-        outTri1[2][1] = {insideTex[1][1], insideTex[1][2], insideTex[1][3]}
-
+        outTri1[1][1] = {
+            inTri[1][insidePi[1]][1],
+            inTri[1][insidePi[1]][2],
+            inTri[1][insidePi[1]][3],
+            inTri[1][insidePi[1]][4]
+        }
+        outTri1[2][1] = {
+            inTri[2][insideTi[1]][1],
+            inTri[2][insideTi[1]][2],
+            inTri[2][insideTi[1]][3]
+        }
         local t
-        local lsDP = vectorDotProduct(insidePoints[1], planeN)
+        local lsDP = vectorDotProduct(inTri[1][insidePi[1]], planeN)
         outTri1[1][2], t = vectorIntersectPlane(
             planeDP,
-            lsDP, vectorDotProduct(outsidePoints[1], planeN),
-            insidePoints[1], outsidePoints[1]
+            lsDP, vectorDotProduct(inTri[1][outsidePi[1]], planeN),
+            inTri[1][insidePi[1]], inTri[1][outsidePi[1]]
         )
-        outTri1[2][2][1] = t * (outsideTex[1][1] - insideTex[1][1]) + insideTex[1][1]
-        outTri1[2][2][2] = t * (outsideTex[1][2] - insideTex[1][2]) + insideTex[1][2]
-        outTri1[2][2][3] = t * (outsideTex[1][3] - insideTex[1][3]) + insideTex[1][3]
+        outTri1[2][2][1] = t * (inTri[2][outsideTi[1]][1] - inTri[2][insideTi[1]][1]) + inTri[2][insideTi[1]][1]
+        outTri1[2][2][2] = t * (inTri[2][outsideTi[1]][2] - inTri[2][insideTi[1]][2]) + inTri[2][insideTi[1]][2]
+        outTri1[2][2][3] = t * (inTri[2][outsideTi[1]][3] - inTri[2][insideTi[1]][3]) + inTri[2][insideTi[1]][3]
 
         outTri1[1][3], t = vectorIntersectPlane(
             planeDP,
-            lsDP, vectorDotProduct(outsidePoints[2], planeN),
-            insidePoints[1], outsidePoints[2]
+            lsDP, vectorDotProduct(inTri[1][outsidePi[2]], planeN),
+            inTri[1][insidePi[1]], inTri[1][outsidePi[2]]
         )
-        outTri1[2][3][1] = t * (outsideTex[2][1] - insideTex[1][1]) + insideTex[1][1]
-        outTri1[2][3][2] = t * (outsideTex[2][2] - insideTex[1][2]) + insideTex[1][2]
-        outTri1[2][3][3] = t * (outsideTex[2][3] - insideTex[1][3]) + insideTex[1][3]
+        outTri1[2][3][1] = t * (inTri[2][outsideTi[2]][1] - inTri[2][insideTi[1]][1]) + inTri[2][insideTi[1]][1]
+        outTri1[2][3][2] = t * (inTri[2][outsideTi[2]][2] - inTri[2][insideTi[1]][2]) + inTri[2][insideTi[1]][2]
+        outTri1[2][3][3] = t * (inTri[2][outsideTi[2]][3] - inTri[2][insideTi[1]][3]) + inTri[2][insideTi[1]][3]
 
+        planeDP, lsDP = nil, nil
         return 1, outTri1
 
     -- One point outside plane, return two smaller tris
@@ -511,23 +406,23 @@ local function triClipPlane(planeP, planeN, inTri)
         local outTri2 = {{{0, 0, 0, 1}, {0, 0, 0, 1}, {0, 0, 0, 1}}, {{0, 0, 1}, {0, 0, 1}, {0, 0, 1}}}
 
         local t
-        outTri1[1][1] = {insidePoints[1][1], insidePoints[1][2], insidePoints[1][3], insidePoints[1][4]}
-        outTri1[1][2] = {insidePoints[2][1], insidePoints[2][2], insidePoints[2][3], insidePoints[2][4]}
-        outTri1[2][1] = {insideTex[1][1], insideTex[1][2], insideTex[1][3]}
-        outTri1[2][2] = {insideTex[2][1], insideTex[2][2], insideTex[2][3]}
+        outTri1[1][1] = {inTri[1][insidePi[1]][1], inTri[1][insidePi[1]][2], inTri[1][insidePi[1]][3], inTri[1][insidePi[1]][4]}
+        outTri1[1][2] = {inTri[1][insidePi[2]][1], inTri[1][insidePi[2]][2], inTri[1][insidePi[2]][3], inTri[1][insidePi[2]][4]}
+        outTri1[2][1] = {inTri[2][insideTi[1]][1], inTri[2][insideTi[1]][2], inTri[2][insideTi[1]][3]}
+        outTri1[2][2] = {inTri[2][insideTi[2]][1], inTri[2][insideTi[2]][2], inTri[2][insideTi[2]][3]}
 
-        local leDP = vectorDotProduct(outsidePoints[1], planeN)
+        local leDP = vectorDotProduct(inTri[1][outsidePi[1]], planeN)
         outTri1[1][3], t = vectorIntersectPlane(
             planeDP,
-            vectorDotProduct(insidePoints[1], planeN), leDP,
-            insidePoints[1], outsidePoints[1]
+            vectorDotProduct(inTri[1][insidePi[1]], planeN), leDP,
+            inTri[1][insidePi[1]], inTri[1][outsidePi[1]]
         )
-        outTri1[2][3][1] = t * (outsideTex[1][1] - insideTex[1][1]) + insideTex[1][1]
-        outTri1[2][3][2] = t * (outsideTex[1][2] - insideTex[1][2]) + insideTex[1][2]
-        outTri1[2][3][3] = t * (outsideTex[1][3] - insideTex[1][3]) + insideTex[1][3]
+        outTri1[2][3][1] = t * (inTri[2][outsideTi[1]][1] - inTri[2][insideTi[1]][1]) + inTri[2][insideTi[1]][1]
+        outTri1[2][3][2] = t * (inTri[2][outsideTi[1]][2] - inTri[2][insideTi[1]][2]) + inTri[2][insideTi[1]][2]
+        outTri1[2][3][3] = t * (inTri[2][outsideTi[1]][3] - inTri[2][insideTi[1]][3]) + inTri[2][insideTi[1]][3]
 
-        outTri2[1][1] = {insidePoints[2][1], insidePoints[2][2], insidePoints[2][3], insidePoints[2][4]}
-        outTri2[2][1] = {insideTex[2][1], insideTex[2][2], insideTex[2][3]}
+        outTri2[1][1] = {inTri[1][insidePi[2]][1], inTri[1][insidePi[2]][2], inTri[1][insidePi[2]][3], inTri[1][insidePi[2]][4]}
+        outTri2[2][1] = {inTri[2][insideTi[2]][1], inTri[2][insideTi[2]][2], inTri[2][insideTi[2]][3]}
 
         outTri2[1][2] = {outTri1[1][3][1], outTri1[1][3][2], outTri1[1][3][3], outTri1[1][3][4]}
         outTri2[2][2][1] = outTri1[2][3][1]
@@ -535,13 +430,14 @@ local function triClipPlane(planeP, planeN, inTri)
         outTri2[2][2][3] = outTri1[2][3][3]
         outTri2[1][3], t = vectorIntersectPlane(
             planeDP,
-            vectorDotProduct(insidePoints[2], planeN), leDP,
-            insidePoints[2], outsidePoints[1]
+            vectorDotProduct(inTri[1][insidePi[2]], planeN), leDP,
+            inTri[1][insidePi[2]], inTri[1][outsidePi[1]]
         )
-        outTri2[2][3][1] = t * (outsideTex[1][1] - insideTex[2][1]) + insideTex[2][1]
-        outTri2[2][3][2] = t * (outsideTex[1][2] - insideTex[2][2]) + insideTex[2][2]
-        outTri2[2][3][3] = t * (outsideTex[1][3] - insideTex[2][3]) + insideTex[2][3]
+        outTri2[2][3][1] = t * (inTri[2][outsideTi[1]][1] - inTri[2][insideTi[2]][1]) + inTri[2][insideTi[2]][1]
+        outTri2[2][3][2] = t * (inTri[2][outsideTi[1]][2] - inTri[2][insideTi[2]][2]) + inTri[2][insideTi[2]][2]
+        outTri2[2][3][3] = t * (inTri[2][outsideTi[1]][3] - inTri[2][insideTi[2]][3]) + inTri[2][insideTi[2]][3]
 
+        planeDP, leDP = nil, nil
         return 2, outTri1, outTri2
     end
     return 0
@@ -694,9 +590,19 @@ local function updateElapsedTime()
 end
 
 local function createMesh()
+
+    -- Precalculate some commonly used variables
+    -- TODO: Probably could move more here (Lighting normal, etc)
+    screenWidth = gpu.GetScreenWidth(); screenHeight = gpu.GetScreenHeight()
+    halfWidth = 0.5 * screenWidth; halfHeight = 0.5 * screenHeight
+    matProj = matrixMakeProjection(fFov, gpu.GetAspectRatio(), fNear, fFar)
+
     -- Load model, or default to the cube
-    local tris = {}
-    local texture = {}
+    -- Verts, Projected Verts, Viewspace Verts, Tris, Textures, Lazy BF Count Tricount, Vertcount
+    loadedMesh = {vert = {}, pVert = {}, vsVert = {}, tris = {}, 0, lbfc = {}, triCount = 0, vertCount = 0}
+
+    -- Default fallback model
+    -- TODO: Needs vert list, just copy/paste a cube over from blender
     local defaultCube = {
         Triangle({0, 0, 0, 1}, {0, 1, 0, 1}, {1, 1, 0, 1}, {0, 1, 1}, {0, 0, 1}, {1, 0, 1}, "grassSide"),
         Triangle({0, 0, 0, 1}, {1, 1, 0, 1}, {1, 0, 0, 1}, {0, 1, 1}, {1, 0, 1}, {1, 1, 1}, "grassSide"),
@@ -711,49 +617,38 @@ local function createMesh()
         Triangle({1, 0, 1, 1}, {0, 0, 1, 1}, {0, 0, 0, 1}, {0, 1, 1}, {0, 0, 1}, {1, 0, 1}, "grassBottom"),
         Triangle({1, 0, 1, 1}, {0, 0, 0, 1}, {1, 0, 0, 1}, {0, 1, 1}, {1, 0, 1}, {1, 1, 1}, "grassBottom")
     }
+
+    -- Get default-cube if that's what we really want
     if modelFile == "default-cube" then
         -- Default mesh, if no others are specified
-        tris = defaultCube
+        loadedMesh.tris = defaultCube -- TODO: Needs vert list as well
+
+    -- Otherwise, get model from specified model file, if it exists
     else
         -- TODO:
         -- Look for bmp or some texture format with the same name as the loaded mesh
-        local meshToLoad = getMeshFromFile(modelFile)
-        if meshToLoad then
-            tris = meshToLoad
+        if fileExists(modelFile) then
+            loadedMesh.tris, loadedMesh.vert = getMeshFromFile(modelFile)
         else
             modelFile = "default-cube-fallback"
-            tris = defaultCube
+            loadedMesh.tris = defaultCube -- TODO: Needs vert list as well
         end
     end
 
-    -- Breaking the mesh into nameless arrays might seem stupid, and it probably is
-    -- But we only have to deal with its nameless indices once during the entire rasterizing process
-    -- So by all means, this is probably fine
-    -- [1]  [2]  [3]  [4]  - Point 1
-    -- [5]  [6]  [7]  [8]  - Point 2
-    -- [9]  [10] [11] [12] - Point 3
-    -- [13] [14] [15]      - UV 1
-    -- [16] [17] [18]      - UV 1
-    -- [19] [20] [21]      - UV 1
-    -- [22]                - Loaded Texture Index
-    -- [23]                - Tricount
-    -- [24]                - Lazy Culling Countdown
+    loadedMesh.triCount = #loadedMesh.tris
+    loadedMesh.vertCount = #loadedMesh.vert
 
-    loadedMesh = {{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, 0, {}}
-    for i = 1, #tris do
-        loadedMesh[1][i]  = tris[i].p[1][1]; loadedMesh[2][i]  = tris[i].p[1][2]; loadedMesh[3][i]  = tris[i].p[1][3]; loadedMesh[4][i]  = tris[i].p[1][4]
-        loadedMesh[5][i]  = tris[i].p[2][1]; loadedMesh[6][i]  = tris[i].p[2][2]; loadedMesh[7][i]  = tris[i].p[2][3]; loadedMesh[8][i]  = tris[i].p[2][4]
-        loadedMesh[9][i]  = tris[i].p[3][1]; loadedMesh[10][i] = tris[i].p[3][2]; loadedMesh[11][i] = tris[i].p[3][3]; loadedMesh[12][i] = tris[i].p[3][4]
-        loadedMesh[13][i] = tris[i].t[1][1]; loadedMesh[14][i] = tris[i].t[1][2]; loadedMesh[15][i] = tris[i].t[1][3]
-        loadedMesh[16][i] = tris[i].t[2][1]; loadedMesh[17][i] = tris[i].t[2][2]; loadedMesh[18][i] = tris[i].t[2][3]
-        loadedMesh[19][i] = tris[i].t[3][1]; loadedMesh[20][i] = tris[i].t[3][2]; loadedMesh[21][i] = tris[i].t[3][3]
-        loadedMesh[22][i] = tris[i].tex; loadedMesh[24][i] = 0
+    -- We now have a list of verts and a list of tris with indeces pointing towards their 3 vertices
+    -- Also, create a vertex list to contain projected and viewspace vertices
+    for i = 1, loadedMesh.vertCount do
+        loadedMesh.pVert[i] = {0, 0, 0, 1}
+        loadedMesh.vsVert[i] = {0, 0, 0, 1}
     end
-    loadedMesh[23] = #tris
 
-    screenWidth = gpu.GetScreenWidth(); screenHeight = gpu.GetScreenHeight()
-    halfWidth = 0.5 * screenWidth; halfHeight = 0.5 * screenHeight
-    matProj = matrixMakeProjection(fFov, gpu.GetAspectRatio(), fNear, fFar)
+    -- Also build an array of values dictating whether or not a face gets lazy backface culled
+    for i = 1, loadedMesh.triCount do
+        loadedMesh.lbfc[i] = 0
+    end
 end
 
 -- ============================================================
@@ -764,6 +659,7 @@ end
 -- TODO: Optimize/fix oob errors
 local depthBuffer = {}
 local function resetDepthBuffer()
+    depthBuffer = nil
     depthBuffer = {}
 end
 
@@ -815,24 +711,24 @@ local function drawTexturedTriangle(x, y, tri, texU, texV, texW)
 
     -- Blend texture color into the background
     elseif doDepthBlending then
-        local sampleColor = uvSampleTexture(texU / texW, texV / texW, tri.tex)
+        local sampleColor = uvSampleTexture(texU / texW, texV / texW, tri[3])
         if doShadedColoring then
-            sampleColor = GetShadedColor(sampleColor, tri.l)
+            sampleColor = GetShadedColor(sampleColor, tri[5])
         end
         SetPixel(x, y, BlendColor(sampleColor, backgroundColor, texW ^ depthFadeDist))
 
     -- RGB according to surface normals
     elseif doNormalFlatColoring then
-        SetPixel(x, y, tri.col)
+        SetPixel(x, y, tri[4])
 
     -- Shade texture based on angle to specified light source
     elseif doShadedColoring then
-        local sampleColor = uvSampleTexture(texU / texW, texV / texW, tri.tex)
-        SetPixel(x, y, GetShadedColor(sampleColor, tri.l))
+        local sampleColor = uvSampleTexture(texU / texW, texV / texW, tri[3])
+        SetPixel(x, y, GetShadedColor(sampleColor, tri[5]))
 
     -- Just texture
     else
-        SetPixel(x, y, uvSampleTexture(texU / texW, texV / texW, tri.tex))
+        SetPixel(x, y, uvSampleTexture(texU / texW, texV / texW, tri[3]))
     end
 end
 
@@ -841,44 +737,44 @@ end
 -- ============================================================
 
 -- Draw projected triangle to the screen
-local function texturedTriangle(tri)
+local function texturedTriangle(p, u, tri)
 
-    tri.p[1][1] = tri.p[1][1] // 1;  tri.p[2][1] = tri.p[2][1] // 1;  tri.p[3][1] = tri.p[3][1] // 1
-    tri.p[1][2] = tri.p[1][2] // 1;  tri.p[2][2] = tri.p[2][2] // 1;  tri.p[3][2] = tri.p[3][2] // 1
+    p[1][1] = p[1][1] // 1;  p[2][1] = p[2][1] // 1;  p[3][1] = p[3][1] // 1
+    p[1][2] = p[1][2] // 1;  p[2][2] = p[2][2] // 1;  p[3][2] = p[3][2] // 1
 
-    if (tri.p[2][2] < tri.p[1][2]) then
-        tri.p[1][1], tri.p[2][1] = tri.p[2][1], tri.p[1][1]
-        tri.p[1][2], tri.p[2][2] = tri.p[2][2], tri.p[1][2]
-        tri.t[1][1], tri.t[2][1] = tri.t[2][1], tri.t[1][1]
-        tri.t[1][2], tri.t[2][2] = tri.t[2][2], tri.t[1][2]
-        tri.t[1][3], tri.t[2][3] = tri.t[2][3], tri.t[1][3]
+    if (p[2][2] < p[1][2]) then
+        p[1][1], p[2][1] = p[2][1], p[1][1]
+        p[1][2], p[2][2] = p[2][2], p[1][2]
+        u[1][1], u[2][1] = u[2][1], u[1][1]
+        u[1][2], u[2][2] = u[2][2], u[1][2]
+        u[1][3], u[2][3] = u[2][3], u[1][3]
     end
-    if (tri.p[3][2] < tri.p[1][2]) then
-        tri.p[1][1], tri.p[3][1] = tri.p[3][1], tri.p[1][1]
-        tri.p[1][2], tri.p[3][2] = tri.p[3][2], tri.p[1][2]
-        tri.t[1][1], tri.t[3][1] = tri.t[3][1], tri.t[1][1]
-        tri.t[1][2], tri.t[3][2] = tri.t[3][2], tri.t[1][2]
-        tri.t[1][3], tri.t[3][3] = tri.t[3][3], tri.t[1][3]
+    if (p[3][2] < p[1][2]) then
+        p[1][1], p[3][1] = p[3][1], p[1][1]
+        p[1][2], p[3][2] = p[3][2], p[1][2]
+        u[1][1], u[3][1] = u[3][1], u[1][1]
+        u[1][2], u[3][2] = u[3][2], u[1][2]
+        u[1][3], u[3][3] = u[3][3], u[1][3]
     end
-    if (tri.p[3][2] < tri.p[2][2]) then
-        tri.p[2][1], tri.p[3][1] = tri.p[3][1], tri.p[2][1]
-        tri.p[2][2], tri.p[3][2] = tri.p[3][2], tri.p[2][2]
-        tri.t[2][1], tri.t[3][1] = tri.t[3][1], tri.t[2][1]
-        tri.t[2][2], tri.t[3][2] = tri.t[3][2], tri.t[2][2]
-        tri.t[2][3], tri.t[3][3] = tri.t[3][3], tri.t[2][3]
+    if (p[3][2] < p[2][2]) then
+        p[2][1], p[3][1] = p[3][1], p[2][1]
+        p[2][2], p[3][2] = p[3][2], p[2][2]
+        u[2][1], u[3][1] = u[3][1], u[2][1]
+        u[2][2], u[3][2] = u[3][2], u[2][2]
+        u[2][3], u[3][3] = u[3][3], u[2][3]
     end
 
-    local dx1 = tri.p[2][1] - tri.p[1][1]
-    local dy1 = tri.p[2][2] - tri.p[1][2]
-    local du1 = tri.t[2][1] - tri.t[1][1]
-    local dv1 = tri.t[2][2] - tri.t[1][2]
-    local dw1 = tri.t[2][3] - tri.t[1][3]
+    local dx1 = p[2][1] - p[1][1]
+    local dy1 = p[2][2] - p[1][2]
+    local du1 = u[2][1] - u[1][1]
+    local dv1 = u[2][2] - u[1][2]
+    local dw1 = u[2][3] - u[1][3]
 
-    local dx2 = tri.p[3][1] - tri.p[1][1]
-    local dy2 = tri.p[3][2] - tri.p[1][2]
-    local du2 = tri.t[3][1] - tri.t[1][1]
-    local dv2 = tri.t[3][2] - tri.t[1][2]
-    local dw2 = tri.t[3][3] - tri.t[1][3]
+    local dx2 = p[3][1] - p[1][1]
+    local dy2 = p[3][2] - p[1][2]
+    local du2 = u[3][1] - u[1][1]
+    local dv2 = u[3][2] - u[1][2]
+    local dw2 = u[3][3] - u[1][3]
 
     local texU, texV, texW = 0, 0, 0
 
@@ -901,21 +797,21 @@ local function texturedTriangle(tri)
     dv2Step = dv2 / abs(dy2)
     dw2Step = dw2 / abs(dy2)
 
-    for i = tri.p[1][2], tri.p[2][2] do
+    for i = p[1][2], p[2][2] do
 
-        y1Delta = i - tri.p[1][2]
-        ax = (tri.p[1][1] + y1Delta * daxStep) // 1
-        bx = (tri.p[1][1] + y1Delta * dbxStep) // 1
+        y1Delta = i - p[1][2]
+        ax = (p[1][1] + y1Delta * daxStep) // 1
+        bx = (p[1][1] + y1Delta * dbxStep) // 1
 
         -- Starting value
-        texSu = tri.t[1][1] + y1Delta * du1Step
-        texSv = tri.t[1][2] + y1Delta * dv1Step
-        texSw = tri.t[1][3] + y1Delta * dw1Step
+        texSu = u[1][1] + y1Delta * du1Step
+        texSv = u[1][2] + y1Delta * dv1Step
+        texSw = u[1][3] + y1Delta * dw1Step
 
         -- Ending value
-        texEu = tri.t[1][1] + y1Delta * du2Step
-        texEv = tri.t[1][2] + y1Delta * dv2Step
-        texEw = tri.t[1][3] + y1Delta * dw2Step
+        texEu = u[1][1] + y1Delta * du2Step
+        texEv = u[1][2] + y1Delta * dv2Step
+        texEw = u[1][3] + y1Delta * dw2Step
 
         if ax > bx then
             ax, bx = bx, ax
@@ -948,11 +844,11 @@ local function texturedTriangle(tri)
         end
     end
 
-    dx1 = tri.p[3][1] - tri.p[2][1]
-    dy1 = tri.p[3][2] - tri.p[2][2]
-    du1 = tri.t[3][1] - tri.t[2][1]
-    dv1 = tri.t[3][2] - tri.t[2][2]
-    dw1 = tri.t[3][3] - tri.t[2][3]
+    dx1 = p[3][1] - p[2][1]
+    dy1 = p[3][2] - p[2][2]
+    du1 = u[3][1] - u[2][1]
+    dv1 = u[3][2] - u[2][2]
+    dw1 = u[3][3] - u[2][3]
 
     daxStep = dx1 / abs(dy1)
     dbxStep = dx2 / abs(dy2)
@@ -961,22 +857,22 @@ local function texturedTriangle(tri)
     dv1Step = dv1 / abs(dy1)
     dw1Step = dw1 / abs(dy1)
 
-    for i = tri.p[2][2], tri.p[3][2] do
+    for i = p[2][2], p[3][2] do
 
-        y1Delta = i - tri.p[1][2]
-        y2Delta = i - tri.p[2][2]
-        ax = (tri.p[2][1] + y2Delta * daxStep) // 1
-        bx = (tri.p[1][1] + y1Delta * dbxStep) // 1
+        y1Delta = i - p[1][2]
+        y2Delta = i - p[2][2]
+        ax = (p[2][1] + y2Delta * daxStep) // 1
+        bx = (p[1][1] + y1Delta * dbxStep) // 1
 
         -- Starting value
-        texSu = tri.t[2][1] + y2Delta * du1Step
-        texSv = tri.t[2][2] + y2Delta * dv1Step
-        texSw = tri.t[2][3] + y2Delta * dw1Step
+        texSu = u[2][1] + y2Delta * du1Step
+        texSv = u[2][2] + y2Delta * dv1Step
+        texSw = u[2][3] + y2Delta * dw1Step
 
         -- Ending value
-        texEu = tri.t[1][1] + y1Delta * du2Step
-        texEv = tri.t[1][2] + y1Delta * dv2Step
-        texEw = tri.t[1][3] + y1Delta * dw2Step
+        texEu = u[1][1] + y1Delta * du2Step
+        texEv = u[1][2] + y1Delta * dv2Step
+        texEw = u[1][3] + y1Delta * dw2Step
 
         if ax > bx then
             ax, bx = bx, ax
@@ -1016,138 +912,112 @@ local rasterTrisStart; local rasterTrisEnd
 -- Clip each triangle against each side of the viewport
 -- After clipping, render each triangle
 -- TODO: Would be easier to benchmark if rendering was moved to a separate function
-local function viewportClipTriangles(rasterTris)
+local function viewportClipTriangle(triToRaster)
 
     rasterTrisStart = GetCPUTime() -- Timing
 
-    local clipped = {}
-    local listTriangles = {}
-    local nNewTriangles
+    local clipTrisToRaster = {{triToRaster[1], triToRaster[2], triToRaster[3], triToRaster[4], triToRaster[5]}}
+    local nNewTriangles = 1
 
-    for i = 1, #rasterTris[1] do
+    -- Check if any points are outside of screenspace
+    if triToRaster[1][1][1] < 1 or triToRaster[1][1][1] > screenWidth then goto clipTri end
+    if triToRaster[1][1][2] < 1 or triToRaster[1][1][2] > screenHeight then goto clipTri end
+    if triToRaster[1][2][1] < 1 or triToRaster[1][2][1] > screenWidth then goto clipTri end
+    if triToRaster[1][2][2] < 1 or triToRaster[1][2][2] > screenHeight then goto clipTri end
+    if triToRaster[1][3][1] < 1 or triToRaster[1][3][1] > screenWidth then goto clipTri end
+    if triToRaster[1][3][2] < 1 or triToRaster[1][3][2] > screenHeight then goto clipTri end
+    goto skipClip
 
-        -- TODO: Move this below the screenspace check, need to refactor drawing loop though
-        clipped = {}
-        -- TODO: Remove triFromArray and move to full array storage
-        listTriangles = {
-            triFromArray(
-            rasterTris[1][i],  rasterTris[2][i],  rasterTris[3][i],
-            rasterTris[4][i],  rasterTris[5][i],  rasterTris[6][i],
-            rasterTris[7][i],  rasterTris[8][i],  rasterTris[9][i],
-            rasterTris[10][i], rasterTris[11][i], rasterTris[12][i],
-            rasterTris[13][i], rasterTris[14][i], rasterTris[15][i],
-            rasterTris[16][i], rasterTris[17][i], rasterTris[18][i],
-            rasterTris[19][i], rasterTris[20][i], rasterTris[21][i]
-        )}
+    -- If points exist outside of screenspace, clip triangles against sides of viewport
+    ::clipTri::
+    for p = 1, 4 do
 
-        -- Check if any points are outside of screen space
-        if rasterTris[1][i] < 1 or rasterTris[1][i] > screenWidth then goto clipTri end
-        if rasterTris[2][i] < 1 or rasterTris[2][i] > screenHeight then goto clipTri end
-        if rasterTris[4][i] < 1 or rasterTris[4][i] > screenWidth then goto clipTri end
-        if rasterTris[5][i] < 1 or rasterTris[5][i] > screenHeight then goto clipTri end
-        if rasterTris[7][i] < 1 or rasterTris[7][i] > screenWidth then goto clipTri end
-        if rasterTris[8][i] < 1 or rasterTris[8][i] > screenHeight then goto clipTri end
-        goto skipClip
+        local nTrisToAdd = 0
+        while nNewTriangles > 0 do
 
-        -- If not, clip triangles against sides of viewport
-        ::clipTri::
-        nNewTriangles = 1
-        for p = 1, 4 do
+            local testTri = {
+                clipTrisToRaster[1][1],
+                clipTrisToRaster[1][2]
+            }
+            nNewTriangles = nNewTriangles - 1
 
-            local nTrisToAdd = 0
-            while nNewTriangles > 0 do
-
-                -- TODO: Refactor test to be array only
-                -- Edit: Probably not but still a place where optimization might help
-                local testTri = listTriangles[1]
-                nNewTriangles = nNewTriangles - 1
-
-                -- Check against each plane of the viewport
-                -- Before sending to clip, make sure at least one point actually lies outside of that viewport plane
-                if p == 1 then
-                    -- Top
-                    if testTri.p[1][2] < 1 or testTri.p[2][2] < 1 or testTri.p[3][2] < 1 then
-                        nTrisToAdd, clipped[1], clipped[2] = triClipPlane({0, 0, 0}, {0, 1, 0}, {testTri.p, testTri.t})
-                    else
-                        nTrisToAdd = -1
-                        clipped[1] = testTri
-                    end
-				elseif p == 2 then
-                    -- Bottom
-                    if testTri.p[1][2] > screenHeight or testTri.p[2][2] > screenHeight or testTri.p[3][2] > screenHeight then
-                        nTrisToAdd, clipped[1], clipped[2] = triClipPlane({0, screenHeight, 0}, {0, -1, 0}, {testTri.p, testTri.t})
-                    else
-                        nTrisToAdd = -1
-                        clipped[1] = testTri
-                    end
-                elseif p == 3 then
-                    -- Left
-                    if testTri.p[1][1] < 1 or testTri.p[2][1] < 1 or testTri.p[3][1] < 1 then
-                        nTrisToAdd, clipped[1], clipped[2] = triClipPlane({0, 0, 0}, {1, 0, 0}, {testTri.p, testTri.t})
-                    else
-                        nTrisToAdd = -1
-                        clipped[1] = testTri
-                    end
-				elseif p == 4 then
-                    -- Right
-                    if testTri.p[1][1] > screenWidth or testTri.p[2][1] > screenWidth or testTri.p[3][1] > screenWidth then
-                        nTrisToAdd, clipped[1], clipped[2] = triClipPlane({screenWidth, 0, 0}, {-1, 0, 0}, {testTri.p, testTri.t})
-                    else
-                        nTrisToAdd = -1
-                        clipped[1] = testTri
-                    end
+            -- Check against each plane of the viewport
+            -- Before sending to clip, make sure at least one point actually lies outside of that viewport plane
+            local clipped = {}
+            if p == 1 then
+                -- Top
+                if testTri[1][1][2] < 1 or testTri[1][2][2] < 1 or testTri[1][3][2] < 1 then
+                    nTrisToAdd, clipped[1], clipped[2] = triClipPlane({0, 0, 0}, {0, 1, 0}, testTri)
+                else
+                    nTrisToAdd = -1
+                    clipped[1] = testTri
                 end
-
-                if nTrisToAdd == -1 then
-                    -- Removed deep copy, this is faster
-                    TInsert(listTriangles, {
-                        p = {{clipped[1].p[1][1], clipped[1].p[1][2], clipped[1].p[1][3]},
-                             {clipped[1].p[2][1], clipped[1].p[2][2], clipped[1].p[2][3]},
-                             {clipped[1].p[3][1], clipped[1].p[3][2], clipped[1].p[3][3]}},
-                        t = {{clipped[1].t[1][1], clipped[1].t[1][2], clipped[1].t[1][3]},
-                             {clipped[1].t[2][1], clipped[1].t[2][2], clipped[1].t[2][3]},
-                             {clipped[1].t[3][1], clipped[1].t[3][2], clipped[1].t[3][3]}},
-                        tex = testTri.tex, col = testTri.col, l = testTri.l
-                    })
+			elseif p == 2 then
+                -- Bottom
+                if testTri[1][1][2] > screenHeight or testTri[1][2][2] > screenHeight or testTri[1][3][2] > screenHeight then
+                    nTrisToAdd, clipped[1], clipped[2] = triClipPlane({0, screenHeight, 0}, {0, -1, 0}, testTri)
+                else
+                    nTrisToAdd = -1
+                    clipped[1] = testTri
                 end
-
-                for w = 1, nTrisToAdd do
-                    -- Removed deep copy, this is faster
-                    TInsert(listTriangles, {
-                        p = {{clipped[w][1][1][1], clipped[w][1][1][2], clipped[w][1][1][3]},
-                             {clipped[w][1][2][1], clipped[w][1][2][2], clipped[w][1][2][3]},
-                             {clipped[w][1][3][1], clipped[w][1][3][2], clipped[w][1][3][3]}},
-                        t = {{clipped[w][2][1][1], clipped[w][2][1][2], clipped[w][2][1][3]},
-                             {clipped[w][2][2][1], clipped[w][2][2][2], clipped[w][2][2][3]},
-                             {clipped[w][2][3][1], clipped[w][2][3][2], clipped[w][2][3][3]}},
-                        tex = testTri.tex, col = testTri.col, l = testTri.l
-                    })
+            elseif p == 3 then
+                -- Left
+                if testTri[1][1][1] < 1 or testTri[1][2][1] < 1 or testTri[1][3][1] < 1 then
+                    nTrisToAdd, clipped[1], clipped[2] = triClipPlane({1, 0, 0}, {1, 0, 0}, testTri)
+                else
+                    nTrisToAdd = -1
+                    clipped[1] = testTri
                 end
-                TRemove(listTriangles, 1)
+			elseif p == 4 then
+                -- Right
+                if testTri[1][1][1] > screenWidth or testTri[1][2][1] > screenWidth or testTri[1][3][1] > screenWidth then
+                    nTrisToAdd, clipped[1], clipped[2] = triClipPlane({screenWidth + 1, 0, 0}, {-1, 0, 0}, testTri)
+                else
+                    nTrisToAdd = -1
+                    clipped[1] = testTri
+                end
             end
-            nNewTriangles = #listTriangles
+
+            -- If no clipping occurred, just add triangle
+            if nTrisToAdd == -1 then
+                TInsert(clipTrisToRaster, {clipped[1][1], clipped[1][2], triToRaster[3], triToRaster[4], triToRaster[5]})
+            end
+
+            -- If clipping occurred, add all new triangles
+            for w = 1, nTrisToAdd do
+                TInsert(clipTrisToRaster, {clipped[w][1], clipped[w][2], triToRaster[3], triToRaster[4], triToRaster[5]})
+            end
+            TRemove(clipTrisToRaster, 1)
+            clipped = nil
         end
-        ::skipClip::
-
-        -- Rasterize triangles
-        for j = 1, #listTriangles do
-
-            -- TODO: Make more of these combinable
-            -- Render differently based on what was specified in the cl args
-            if doDrawTextured then
-                texturedTriangle(listTriangles[j])
-            elseif doDrawFlatShaded then -- TODO: Move to textured triangle
-                FillTriangle(listTriangles[j].p, GetGreyscaleColor(listTriangles[j].l))
-            end
-
-            if doDrawWireframe then
-                DrawTriangle(listTriangles[j].p, 0xFFFFFF)
-            end
-
-            -- Debug
-            trisDrawnLast = trisDrawnLast + 1
-        end
+        nNewTriangles = #clipTrisToRaster
     end
+    ::skipClip::
+
+    -- Rasterize triangles based on what was specified in the cl args
+    for i = 1, #clipTrisToRaster do
+
+        -- Draw with texture
+        if doDrawTextured then
+            texturedTriangle(clipTrisToRaster[i][1], clipTrisToRaster[i][2], clipTrisToRaster[i])
+
+        -- Draw shaded
+        -- TODO: Move to textured triangle
+        elseif doDrawFlatShaded then
+            FillTriangle(clipTrisToRaster[i][1], GetGreyscaleColor(clipTrisToRaster[i].l))
+        end
+
+        -- Draw wireframe
+        -- TODO: Should not fill triangle if this is enabled (or have an option for it)
+        if doDrawWireframe then
+            DrawTriangle(clipTrisToRaster[i][1], 0xFFFFFF)
+        end
+
+        -- Debug
+        trisDrawnLast = trisDrawnLast + 1
+    end
+    triToRaster = nil
+    clipTrisToRaster = nil
     rasterTrisEnd = GetCPUTime()
 end
 
@@ -1193,61 +1063,41 @@ local function getTrisToRaster()
     -- Get light direction normal (This shouldn't be calculated per-frame unless the light direction is changing)
     local normalizedLightDir = vectorNormalize(lightDirection)
 
-    -- Build array of arrays to hold projected tri data
-    -- May be unreadable but more memory efficient than KV pairs
-    local rasterTris = {
-        {}, {}, {},     -- P1 XYZ
-        {}, {}, {},     -- P2 XYZ
-        {}, {}, {},     -- P3 XYZ
-        {}, {}, {},     -- T1 UVW
-        {}, {}, {},     -- T2 UVW
-        {}, {}, {},     -- T3 UVW
-        {}, {}, {},     -- Texture, Color, Light
-    }
+    -- Near plane vector
+    local nearPlane = {0, 0, fNear}
+    local nearNormal = {0, 0, 1}
 
-    -- For tris in mesh, project
-    for i = 1, loadedMesh[23] do
+    -- First, project vertices
+    for i = 1, loadedMesh.vertCount do
+        loadedMesh.pVert[i] = matrixMultiplyVector(matWorld, loadedMesh.vert[i])
+        loadedMesh.vsVert[i] = matrixMultiplyVector(matView, loadedMesh.pVert[i])
+    end
 
-        -- segmentTimeStart = GetCPUTime()
+    -- Then use projected vertices to construct and 
+    for i = 1, loadedMesh.triCount do
 
         -- If triangle has a lazy culling index over 0, skip projection and decrement its index
-        if loadedMesh[24][i] > 0 then
-            loadedMesh[24][i] = loadedMesh[24][i] - 1
+        if loadedMesh.lbfc[i] > 0 then
+            loadedMesh.lbfc[i] = loadedMesh.lbfc[i] - 1
             lazyCulledCount = lazyCulledCount + 1
             goto skipProj
         end
 
-        -- Rotate tri to world matrix
-        local triTransformed = FastTriangle()
-        triTransformed[1][1] = matrixMultiplyVector(matWorld, {loadedMesh[1][i], loadedMesh[2][i],  loadedMesh[3][i],  loadedMesh[4][i]})
-        triTransformed[1][2] = matrixMultiplyVector(matWorld, {loadedMesh[5][i], loadedMesh[6][i],  loadedMesh[7][i],  loadedMesh[8][i]})
-        triTransformed[1][3] = matrixMultiplyVector(matWorld, {loadedMesh[9][i], loadedMesh[10][i], loadedMesh[11][i], loadedMesh[12][i]})
-        triTransformed[2][1] = {loadedMesh[13][i], loadedMesh[14][i], loadedMesh[15][i]}
-        triTransformed[2][2] = {loadedMesh[16][i], loadedMesh[17][i], loadedMesh[18][i]}
-        triTransformed[2][3] = {loadedMesh[19][i], loadedMesh[20][i], loadedMesh[21][i]}
-        triTransformed[3] = loadedMesh[22][i]
-
         -- Get normal vector
         local normal = {0, 0, 0}
-        local line1 =  {0, 0, 0}
-        local line2 =  {0, 0, 0}
+        local line1 = {0, 0, 0}
+        local line2 = {0, 0, 0}
 
         -- Get lines either side of triangle
-        line1 = vectorSub(triTransformed[1][2], triTransformed[1][1])
-        line2 = vectorSub(triTransformed[1][3], triTransformed[1][1])
+        line1 = vectorSub(loadedMesh.pVert[loadedMesh.tris[i][6][2]], loadedMesh.pVert[loadedMesh.tris[i][6][1]])
+        line2 = vectorSub(loadedMesh.pVert[loadedMesh.tris[i][6][3]], loadedMesh.pVert[loadedMesh.tris[i][6][1]])
 
         -- Get cross product of lines for triangle surface normal
         normal = vectorCrossProduct(line1, line2)
         normal = vectorNormalize(normal)
 
-        -- Nearplane clipping vectors
-        local nearPlane = {0, 0, fNear}
-        local nearNormal = {0, 0, 1}
-
         -- Get ray from triangle to camera
-        local vCameraRay = vectorSub(triTransformed[1][1], vCamera)
-
-        -- segmentTimeStartFrameTotal = segmentTimeStartFrameTotal + GetCPUTime() - segmentTimeStart
+        local vCameraRay = vectorSub(loadedMesh.pVert[loadedMesh.tris[i][6][1]], vCamera)
 
         -- If back-facing, then skip rendering
         -- Toy with the threshold a bit, since culled faces have a lag before being checked again
@@ -1255,21 +1105,21 @@ local function getTrisToRaster()
         local normalToCamera = vectorDotProduct(normal, vCameraRay)
         if normalToCamera < bfcThreshold then
 
-            -- Get shaded color
+            -- Get amount of shade relative to light normal
             local lightDp = max(min(lightBias + vectorDotProduct(normalizedLightDir, normal), 1), shadeMaximum)
-            triTransformed[5] = lightDp
 
             -- Convert world space -> view space
             local triViewed = FastTriangle()
-            triViewed[1][1] = matrixMultiplyVector(matView, triTransformed[1][1])
-            triViewed[1][2] = matrixMultiplyVector(matView, triTransformed[1][2])
-            triViewed[1][3] = matrixMultiplyVector(matView, triTransformed[1][3])
-            triViewed[2] = triTransformed[2]
-            triViewed[3] = triTransformed[3]
-            triViewed[4] = triTransformed[4]
-            triViewed[5] = triTransformed[5]
+            triViewed[1][1] = loadedMesh.vsVert[loadedMesh.tris[i][6][1]]
+            triViewed[1][2] = loadedMesh.vsVert[loadedMesh.tris[i][6][2]]
+            triViewed[1][3] = loadedMesh.vsVert[loadedMesh.tris[i][6][3]]
+            -- Why can we copy vertex positions, but texture positions must be deep copied?
+            triViewed[2][1] = {loadedMesh.tris[i][2][1][1], loadedMesh.tris[i][2][1][2], loadedMesh.tris[i][2][1][3]}
+            triViewed[2][2] = {loadedMesh.tris[i][2][2][1], loadedMesh.tris[i][2][2][2], loadedMesh.tris[i][2][2][3]}
+            triViewed[2][3] = {loadedMesh.tris[i][2][3][1], loadedMesh.tris[i][2][3][2], loadedMesh.tris[i][2][3][3]}
 
-            if doNormalFlatColoring then triViewed[4] = getColorFromNormal(normal) end
+            -- TODO: This is potentially destructive, but who knows
+            if doNormalFlatColoring then loadedMesh.tris[i][4] = getColorFromNormal(normal) end
 
             -- Handle clipping triangles against near plane
             local clippedTris
@@ -1277,12 +1127,15 @@ local function getTrisToRaster()
             clippedTris, clipped[1], clipped[2] = triClipPlane(nearPlane, nearNormal, triViewed)
             for n = 1, clippedTris do
 
+                -- segmentTimeStart = GetCPUTime()
+
                 -- Project triangles from 3D to 2D
                 clipped[n][1][1] = matrixMultiplyVector(matProj, clipped[n][1][1])
                 clipped[n][1][2] = matrixMultiplyVector(matProj, clipped[n][1][2])
                 clipped[n][1][3] = matrixMultiplyVector(matProj, clipped[n][1][3])
 
                 -- Project textures as well
+                -- clipped[n].texture.u/v/w[1, 2, 3]
                 clipped[n][2][1][1] = clipped[n][2][1][1] / clipped[n][1][1][4]
                 clipped[n][2][2][1] = clipped[n][2][2][1] / clipped[n][1][2][4]
                 clipped[n][2][3][1] = clipped[n][2][3][1] / clipped[n][1][3][4]
@@ -1312,35 +1165,39 @@ local function getTrisToRaster()
                 clipped[n][1][2] = vectorAdd(clipped[n][1][2], vOffsetView)
                 clipped[n][1][3] = vectorAdd(clipped[n][1][3], vOffsetView)
 
-                -- Add to rasterize list
-                -- This crap is so dumb but its like a 30% cpu gain for heavy tri models
-                TInsert(rasterTris[1],  clipped[n][1][1][1] * halfWidth); TInsert(rasterTris[2], clipped[n][1][1][2] * halfHeight); TInsert(rasterTris[3], clipped[n][1][1][3])
-                TInsert(rasterTris[4],  clipped[n][1][2][1] * halfWidth); TInsert(rasterTris[5], clipped[n][1][2][2] * halfHeight); TInsert(rasterTris[6], clipped[n][1][2][3])
-                TInsert(rasterTris[7],  clipped[n][1][3][1] * halfWidth); TInsert(rasterTris[8], clipped[n][1][3][2] * halfHeight); TInsert(rasterTris[9], clipped[n][1][3][3])
-                TInsert(rasterTris[10], clipped[n][2][1][1])
-                TInsert(rasterTris[11], clipped[n][2][1][2])
-                TInsert(rasterTris[12], clipped[n][2][1][3])
-                TInsert(rasterTris[13], clipped[n][2][2][1])
-                TInsert(rasterTris[14], clipped[n][2][2][2])
-                TInsert(rasterTris[15], clipped[n][2][2][3])
-                TInsert(rasterTris[16], clipped[n][2][3][1])
-                TInsert(rasterTris[17], clipped[n][2][3][2])
-                TInsert(rasterTris[18], clipped[n][2][3][3])
-                TInsert(rasterTris[19], triViewed[3])
-                TInsert(rasterTris[20], triViewed[4])
-                TInsert(rasterTris[21], triViewed[5])
+                -- Scale into screenspace
+                clipped[n][1][1][1] = clipped[n][1][1][1] * halfWidth
+                clipped[n][1][2][1] = clipped[n][1][2][1] * halfWidth
+                clipped[n][1][3][1] = clipped[n][1][3][1] * halfWidth
+                clipped[n][1][1][2] = clipped[n][1][1][2] * halfHeight
+                clipped[n][1][2][2] = clipped[n][1][2][2] * halfHeight
+                clipped[n][1][3][2] = clipped[n][1][3][2] * halfHeight
+
+                -- Copy texture over
+                clipped[n][3] = loadedMesh.tris[i][3]
+                clipped[n][4] = loadedMesh.tris[i][4]
+                clipped[n][5] = lightDp
+
+                -- Send triangle to be viewport clipped and then rendered
+                viewportClipTriangle(clipped[n])
+
+                -- segmentTimeStartFrameTotal = segmentTimeStartFrameTotal + GetCPUTime() - segmentTimeStart
             end
+
+            -- Clear crap for gc
+            clipped = nil
+            triViewed = nil
+
         elseif normalToCamera > bfcLazyThreshold then
             -- Face was backface-culled
             -- Add a value between 1 and 2 to its lazy culling index
             -- As frames tick by, faces with an index value above 0 tick down by one
             -- Only faces with a lazy culling index of 0 move onto projection
-            loadedMesh[24][i] = i % 2 + 1
+            loadedMesh.lbfc[i] = i % 2 + 1
         end
         ::skipProj::
     end
     projectTimeEnd = GetCPUTime()
-    return rasterTris
 end
 
 -- ============================================================
@@ -1352,6 +1209,7 @@ local projectionTimeTotal = 0; local rasterizeTimeTotal = 0; local segmentTimeTo
 
 -- Print debug stats to the screen
 local function modelDebug()
+    -- Timing Test Bench: https://onecompiler.com/lua/44zp873h2
 
     projectionTimeTotal = projectionTimeTotal + (projectTimeEnd - projectTimeStart)
     rasterizeTimeTotal = rasterizeTimeTotal + (rasterTrisEnd - rasterTrisStart)
@@ -1361,7 +1219,7 @@ local function modelDebug()
     local segAverage = segmentTimeTotal / debugCycles
 
     SetText(1, 1, modelFile, 0xFFFFFF, 0x000000, false)
-    SetText(1, 3, string.format("TRIS: %d - VERT: %d", loadedMesh[23], vertCount), 0xFFFFFF, 0x000000, false)
+    SetText(1, 3, string.format("TRIS: %d - VERT: %d", loadedMesh.triCount, loadedMesh.vertCount), 0xFFFFFF, 0x000000, false)
     SetText(1, 5, string.format("DRAWN: %d", trisDrawnLast), 0xFFFFFF, 0x000000, false)
     SetText(1, 7, string.format("Proj: %0.1fms", (projAverage) * 1000), 0xFFFFFF, 0x000000, false)
     SetText(1, 9, string.format("Rast: %0.1fms", (rastAverage) * 1000), 0xFFFFFF, 0x000000, false)
@@ -1440,8 +1298,7 @@ end
 local function renderTriangles()
     ClearScreen()
     resetDepthBuffer()
-    local rasterTris = getTrisToRaster()
-    viewportClipTriangles(rasterTris)
+    getTrisToRaster()
 end
 
 local function main()

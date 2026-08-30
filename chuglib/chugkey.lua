@@ -8,7 +8,7 @@ local chugkey = {
 
 function chugkey.parseKeyCode(e)
     local rKey
-    -- key pressed, but not a char, check for any wanted command keys
+    -- Key pressed, but not a char, check for any wanted command keys
     if e[3] == 0 then
         if e[4] ~= 0 then
             if e[4] == 0xCB then rKey = "LEFT"
@@ -17,7 +17,7 @@ function chugkey.parseKeyCode(e)
             elseif e[4] == 0xD0 then rKey = "DOWN"
             end
         end
-    -- else char pressed
+    -- Else char pressed
     else rKey = string.upper(string.char(e[3])) end
     return rKey
 end
@@ -29,19 +29,19 @@ end
 function chugkey.updateKeypress(handler)
     local tEvent = table.pack(event.pull(0))
     local sKey = nil
-    -- parse keycode
+    -- Parse keycode
     if tEvent[1] == "key_down" then
-        local sKey = handler.parseKeyCode(tEvent)
+        sKey = handler.parseKeyCode(tEvent)
         if sKey ~= nil then handler.keysPressed[sKey] = true end
     elseif tEvent[1] == "key_up" then
-        local sKey = handler.parseKeyCode(tEvent)
+        sKey = handler.parseKeyCode(tEvent)
         if sKey ~= nil then handler.keysPressed[sKey] = false end
     end
 end
 
 function chugkey.debugPrintKeyPresses(handler)
     local printString = ""
-    for k, v in pairs(handler.keysPressed) do
+    for k, _ in pairs(handler.keysPressed) do
         if handler.keysPressed[k] then
             if k ~= nil then printString = printString .. k .. ", " end
         end
@@ -52,7 +52,6 @@ end
 local inputManager = chugkey
 local function main()
     while true do
-
         inputManager.updateKeypress(inputManager)
         inputManager.debugPrintKeyPresses(inputManager)
 
@@ -63,7 +62,6 @@ local function main()
     end
 end
 
--- set arguments upon startup
 local function setVariables()
     if ops.d then main() end
 end

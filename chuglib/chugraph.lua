@@ -40,7 +40,7 @@ local gpuUsageStats = {
     cpuTimeTotal = 0, frameTimeTotal = 0, usedMemTotal = 0, gpuUsageTotal = 0
 }
 
-local TableInsert = table.insert
+local TableInsert, Concat = table.insert, table.concat
 local Sub, GetByte, StringFormat = string.sub, string.byte, string.format
 local Modulo, Abs, Min, Max = math.fmod, math.abs, math.min, math.max
 local GPUAllocateBuffer, GPUSetActiveBuffer, GPUFreeBuffer, GPUFreeAllBuffers
@@ -236,26 +236,26 @@ local function DrawFrame()
 
                     -- New and original match exactly, insert returned char
                     if fillGroup[3] == newFore and fillGroup[4] == newBack then
-                        TableInsert(charString, newChar)
                         charsAdded = charsAdded + 1
+                        charString[charsAdded] = newChar
 
                     -- New and original match but are inverted, return inverted char
                     elseif fillGroup[3] == newBack and fillGroup[4] == newFore then
-                        TableInsert(charString, inverseChars[newChar])
                         charsAdded = charsAdded + 1
+                        charString[charsAdded] = inverseChars[newChar]
 
                     -- If original fore/back are the same
                     elseif fillGroup[3] == fillGroup[4] then
 
                         -- If new fore matches original fore, insert returned char and set original back to new fore
                         if newFore == fillGroup[3] then
-                            TableInsert(charString, newChar)
                             charsAdded = charsAdded + 1
+                            charString[charsAdded] = newChar
                             fillGroup[4] = newBack
                         -- If new back matches original fore, then insert inverted char and set original back to new fore
                         elseif newBack == fillGroup[3] then
-                            TableInsert(charString, inverseChars[newChar])
                             charsAdded = charsAdded + 1
+                            charString[charsAdded] = inverseChars[newChar]
                             fillGroup[4] = newFore
                         end
                     else break end
@@ -268,12 +268,12 @@ local function DrawFrame()
 
                         -- If new fore and original fore match, insert returned char
                         if fillGroup[3] == newFore then
-                            TableInsert(charString, newChar)
                             charsAdded = charsAdded + 1
+                            charString[charsAdded] = newChar
                         -- If new fore and original back match, insert inverted char
                         elseif fillGroup[4] == newFore then
-                            TableInsert(charString, inverseChars[newChar])
                             charsAdded = charsAdded + 1
+                            charString[charsAdded] = inverseChars[newChar]
                         end
 
                     -- If original fore/back are the same
@@ -281,12 +281,12 @@ local function DrawFrame()
 
                         -- If new colors equal to original, insert returned char
                         if newFore == fillGroup[3] then
-                            TableInsert(charString, newChar)
                             charsAdded = charsAdded + 1
+                            charString[charsAdded] = newChar
                         -- Otherwise, return inversed char, and set new color to original back
                         else
-                            TableInsert(charString, inverseChars[newChar])
                             charsAdded = charsAdded + 1
+                            charString[charsAdded] = inverseChars[newChar]
                             fillGroup[4] = newBack
                         end
                     end
@@ -323,11 +323,11 @@ local function DrawFrame()
             -- Add grouped pixels to list
             if drawGroup[fillGroup[3]] == nil then drawGroup[fillGroup[3]] = {} end
             if drawGroup[fillGroup[3]][fillGroup[4]] == nil then
-                drawGroup[fillGroup[3]][fillGroup[4]] = {{}, {}, {}}
+                drawGroup[fillGroup[3]][fillGroup[4]] = {{0}, {0}, {""}}
             end
             TableInsert(drawGroup[fillGroup[3]][fillGroup[4]][1], fillGroup[1])
             TableInsert(drawGroup[fillGroup[3]][fillGroup[4]][2], fillGroup[2])
-            TableInsert(drawGroup[fillGroup[3]][fillGroup[4]][3], table.concat(charString))
+            TableInsert(drawGroup[fillGroup[3]][fillGroup[4]][3], Concat(charString))
 
             fillGroup = nil
             ::continue::

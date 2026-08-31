@@ -648,11 +648,10 @@ local function BlendColor(c1, c2, amount)
     local rNew = r1 + (rDiff * blend)
     local gNew = g1 + (gDiff * blend)
     local bNew = b1 + (bDiff * blend)
-    local grey = GetGreyscaleColor((rNew + gNew + bNew) / 3)
+    local greyRGB = GetGreyscaleColor((rNew + gNew + bNew) / 3)
 
     local realRGB = ((rNew * 255 // 1) << 16) + ((gNew * 255 // 1) << 8) + (bNew * 255 // 1)
     local hexRGB = ValidHexFromRGB(rNew, gNew, bNew)
-    local greyRGB = ValidHexFromRGB(grey, grey, grey)
     if Abs(hexRGB - realRGB) < Abs(greyRGB - realRGB) then return hexRGB
     else return greyRGB end
 end

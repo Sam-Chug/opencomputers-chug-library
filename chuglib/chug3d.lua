@@ -601,7 +601,6 @@ local function createMesh()
         vert = {}, pVert = {}, vsVert = {}, -- Raw vertices, and two arrays for storing projected and viewspace vertices
         uvs = {},                           -- Raw texture coordinates
         vInd = {}, uInd = {},               -- For each triangle, its vertex and uv lookup indices
-        lbfc = {},                          -- Lazy back face culling index
         triCount = 0, vertCount = 0
     }
 
@@ -622,11 +621,6 @@ local function createMesh()
     for i = 1, loadedMesh.vertCount do
         loadedMesh.pVert[i] = {0, 0, 0, 1}
         loadedMesh.vsVert[i] = {0, 0, 0, 1}
-    end
-
-    -- Also build an array of values dictating whether or not a face gets lazy backface culled
-    for i = 1, loadedMesh.triCount do
-        loadedMesh.lbfc[i] = 0
     end
 end
 
@@ -1045,13 +1039,6 @@ local function rasterizeMesh()
     for i = 1, loadedMesh.triCount do
         projectionStart = GetCPUTime()
 
-        -- If triangle has a lazy culling index over 0, skip projection and decrement its index
-        if loadedMesh.lbfc[i] > 0 then
-            loadedMesh.lbfc[i] = loadedMesh.lbfc[i] - 1
-            lazyCulledCount = lazyCulledCount + 1
-            goto skipProj
-        end
-
         -- Get face normal
         line1 = vectorSub(loadedMesh.pVert[loadedMesh.vInd[i][2]], loadedMesh.pVert[loadedMesh.vInd[i][1]])
         line2 = vectorSub(loadedMesh.pVert[loadedMesh.vInd[i][3]], loadedMesh.pVert[loadedMesh.vInd[i][1]])
@@ -1134,11 +1121,7 @@ local function rasterizeMesh()
                 viewportClipTriangle({pClipped[n]})
                 pClipped[n] = nil
             end
-        elseif normalToCamera > bfcLazyThreshold then
-            -- If tri is facing far enough away from the camera, halt projection for a frame or two
-            loadedMesh.lbfc[i] = i % 2 + 1
         end
-        ::skipProj::
     end
 end
 

@@ -1,15 +1,15 @@
+-- ============================================================
+-- CREDITS:
+-- The code here was originally built following a tutorial by Javidx9 on YouTube
+-- "Code-It-Yourself! 3D Graphics Engine" -> https://youtu.be/ih20l3pJoeU
+-- Since then, it has been heavily re-writtem and optimized for a low-memory lua environment.
+-- ============================================================
+
 local component = require("component")
 local shell = require("shell")
 local _, ops = shell.parse(...)
 local computer = require("computer")
-local version = "0.3.0a"
-
--- ============================================================
--- CREDITS:
--- The code here was originally built following a tutorial by Javidx9 on youtube
--- "Code-It-Yourself! 3D Graphics Engine" -> https://youtu.be/ih20l3pJoeU
--- Since then, it has been heavily re-writtem and optimized for a low-memory lua environment.
--- ============================================================
+local version = "0.3.1a"
 
 -- Graphics Library
 local gpu = require("chugraph")
@@ -22,36 +22,34 @@ local inputManager = require("chugkey")
 -- RENDER CONFIGS
 -- ============================================================
 
-local doNormalFlatColoring = false
-local doDepthBufferColoring = false
-local doShadedColoring = false
+-- Rotation
+local doModelRotate, doModelRotateX, doModelRotateZ, doModelRotateY = false, false, false, false
 
-local doModelRotate = false
-local doModelRotateX = false
-local doModelRotateZ = false
-local doModelRotateY = false
-
+-- Rendering styles
+local drawNormalColor = false
+local drawDepthBuffer = false
+local drawShaded = false
 local doDrawTextured = true
-local doDrawFlatShaded = false              -- Not yet implemented
-local doDrawWireframe = false
-local doDepthBlending = false
+local drawFlatShade = false
+local drawWireFrame = false
+local drawDepthBlend = false
 
-local backgroundColor = 0x00DBFF            -- Color of the background in the scene
-local depthFadeDist = 0.4                   -- Square depth value by this value when blending colors into the background
-local bfcThreshold = 0.0                    -- Cull any face whos dot product against camera normal is above this
-local lightDirection = {0.1, 0.1, -1}       -- [Sunlight-ish](0.3, 1, 0) | [Topdown-ish](0.1, 0.1, -1)
-local shadeMaximum = 5 / 16                 -- Maximum darkness in the most shaded areas
-local lightBias = 0.3                       -- Softens faces that are 90 degrees offset to light direction
-local fNear = 0.25                          -- Near plane distance
-local fFar = 1000                           -- Far plane distance
-local fFov = 90                             -- Field of view
+-- Rendering fluff
+local backgroundColor = 0x00DBFF       -- Color of the background in the scene
+local depthFadeDist = 0.4              -- Square depth value by this value when blending colors into the background
+local bfcThreshold = 0.0               -- Cull any face whos dot product against camera normal is above this
+local lightDirection = {0.1, 0.1, -1}  -- [Sunlight-ish](0.3, 1, 0) | [Topdown-ish](0.1, 0.1, -1)
+local shadeMaximum = 5 / 16            -- Maximum darkness in the most shaded areas
+local lightBias = 0.3                  -- Softens faces that are 90 degrees offset to light direction
+local fNear = 0.25                     -- Near plane distance
+local fFar = 1000                      -- Far plane distance
+local fFov = 90                        -- Field of view
+local modelFile = "teapot.obj"         -- Default loaded model, pretty much just for debugging
 
 -- "Cheats" -> These methods can increase rendering speeds a lot, but with some sacrifice to visual fidelity
--- They are no longer implemented, but may be re-introduced under a toggleable setting
-local bfcLazyThreshold = 0.8                -- Lazy backface culling threshold. Faces turned this far away should be lazy occluded
-local minRastArea = 0.1                     -- Any triangle with an area below this value will not be drawn
-
-local modelFile = "teapot.obj"              -- Default loaded model, pretty much just for debugging
+-- No longer implemented, but may be re-introduced under a toggleable setting
+local bfcLazyThreshold = 0.8           -- Lazy backface culling threshold. Faces turned this far away should be lazy occluded
+local minRastArea = 0.1                -- Any triangle with an area below this value will not be drawn
 
 local function setArguments()
     -- load model from input filename
@@ -63,11 +61,12 @@ local function setArguments()
     if ops.back ~= nil then
         backgroundColor = ops.back + 0
     end
-    if ops.n then doNormalFlatColoring = true end
-    if ops.d then doDepthBufferColoring = true end
-    if ops.s then doShadedColoring = true end
-    if ops.b then doDepthBlending = true end
-    if ops.f then doDrawFlatShaded = true end
+    if ops.n then drawNormalColor = true end
+    if ops.d then drawDepthBuffer = true end
+    if ops.s then drawShaded = true end
+    if ops.b then drawDepthBlend = true end
+    if ops.f then drawFlatShade = true end
+    if ops.w then drawWireFrame = true end
     if ops.r then
         doModelRotate = true
         if ops.x then doModelRotateX = true
@@ -79,7 +78,6 @@ local function setArguments()
             doModelRotateY = true
         end
     end
-    if ops.w then doDrawWireframe = true end
 end
 setArguments()
 
@@ -93,7 +91,7 @@ local GetCPUTime = os.clock
 
 local ClearScreen, UpdateScreen = gpu.ClearScreen, gpu.UpdateScreen
 local SetText, SetPixel = gpu.SetText, gpu.SetPixel
-local DrawTriangle, FillTriangle = gpu.DrawTriangle, gpu.FillTriangle
+local DrawTriangle = gpu.DrawTriangle
 local GetGreyscaleColor, GetShadedColor, BlendColor = gpu.GetGreyscaleColor, gpu.GetShadedColor, gpu.BlendColor
 
 local TInsert = table.insert; local TRemove = table.remove
@@ -314,9 +312,8 @@ local function vIntersectPlane(planeDP, ad, bd, lineStart, lineEnd)
     return vAdd(lineStart, lineToIntersect), t
 end
 
-local insidePi = {0, 0, 0}; local outsidePi = {0, 0, 0}
-local insideTi = {0, 0, 0}; local outsideTi = {0, 0, 0}
-local nInsideP = 0; local nOutsideP = 0
+local insidePi, outsidePi, insideTi, outsideTi = {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}
+local nInsideP, nOutsideP = 0, 0
 
 -- Test if triangle clips plane, return clipped triangles if so
 local function triClipPlane(planeDP, planeN, inTri)
@@ -425,7 +422,7 @@ local function mMultiplyVector(m, i)
     return v
 end
 
--- Set vector i multiplied by matrix m into reference table v
+-- Set vector i multiplied by matrix m into table reference v
 local function mMultiplyVectorR(v, m, i)
     v[1] = i[1] * m[1][1] + i[2] * m[2][1] + i[3] * m[3][1] + i[4] * m[4][1]
 	v[2] = i[1] * m[1][2] + i[2] * m[2][2] + i[3] * m[3][2] + i[4] * m[4][2]
@@ -487,8 +484,9 @@ local function mMakeTranslation(x, y, z)
 end
 
 -- Create projection matrix from input FOV, aspect ratio, near and far distance
+local degToRad = 0.5 / 180 * 3.14159
 local function mMakeProjection(fFovDegrees, fAspectRatio, inFNear, inFFar)
-    local fFovRad = 1 / tan(fFovDegrees * 0.5 / 180 * 3.14159)
+    local fFovRad = 1 / tan(fFovDegrees * degToRad)
     local matrix = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
     matrix[1][1] = fAspectRatio * fFovRad
     matrix[2][2] = fFovRad
@@ -670,27 +668,27 @@ local function drawTexturedTriangle(x, y, tri, texU, texV, texW)
     -- Also should be re-ordered based on whatever is most commonly used? Or just rewritten more elegantly
 
     -- Greyscale depth buffer
-    if doDepthBufferColoring then
+    if drawDepthBuffer then
         SetPixel(x, y, GetGreyscaleColor(texW))
 
     -- Blend texture color into the background
-    elseif doDepthBlending then
+    elseif drawDepthBlend then
         local sampleColor = uvSampleTexture(texU / texW, texV / texW, tri[3])
-        if doShadedColoring then
+        if drawShaded then
             sampleColor = GetShadedColor(sampleColor, tri[5])
         end
         SetPixel(x, y, BlendColor(sampleColor, backgroundColor, texW ^ depthFadeDist))
 
     -- RGB according to surface normals
-    elseif doNormalFlatColoring then
+    elseif drawNormalColor then
         SetPixel(x, y, tri[4])
 
     -- Shade texture based on angle to specified light source
-    elseif doDrawFlatShaded then
+    elseif drawFlatShade then
         SetPixel(x, y, GetGreyscaleColor(tri[5]))
 
     -- Texture with shading based on per-triangle lighting
-    elseif doShadedColoring then
+    elseif drawShaded then
         local sampleColor = uvSampleTexture(texU / texW, texV / texW, tri[3])
         SetPixel(x, y, GetShadedColor(sampleColor, tri[5]))
 
@@ -950,7 +948,7 @@ local function viewportClipTriangle(trisToRaster)
     for i = 1, nNewTriangles do
 
         -- Draw wireframe
-        if doDrawWireframe then
+        if drawWireFrame then
             DrawTriangle(trisToRaster[i][1], 0xFFFFFF)
 
         -- Draw with texture
@@ -1027,7 +1025,7 @@ local function rasterizeMesh()
             -- Get amount of shade relative to light normal, and find normal color if needed
             local lightDp = max(min(lightBias + vDotProduct(nLightDir, normal), 1), shadeMaximum)
             local tColor = 0x000000
-            if doNormalFlatColoring then tColor = getColorFromNormal(normal) end
+            if drawNormalColor then tColor = getColorFromNormal(normal) end
 
             -- Clip triangles against near plane
             nPClipped, pClipped[1], pClipped[2] = triClipPlane(nearDP, nearNormal, {

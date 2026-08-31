@@ -143,6 +143,9 @@ local function fileExists(filename)
     return false
 end
 
+local vertPackS = "fffB"
+local vertVsPackS = "ffff"
+
 -- For default cube mesh, this is probably stupid but I can't think of a clean way to merge this below
 local function getMeshFromText(text)
     local tris, verts, uvs = {}, {}, {}
@@ -156,7 +159,7 @@ local function getMeshFromText(text)
 
         -- Vertex position
         if data[1] == "v" then
-            TInsert(verts, {tonumber(data[2]), tonumber(data[3]), tonumber(data[4]), 1})
+            TInsert(verts, string.pack(vertPackS, tonumber(data[2]), tonumber(data[3]), tonumber(data[4]), 1))
 
         -- UVs
         elseif data[1] == "vt" then
@@ -206,7 +209,7 @@ local function getMeshFromFile(filename)
 
         -- Vertex position
         if data[1] == "v" then
-            TInsert(verts, {tonumber(data[2]), tonumber(data[3]), tonumber(data[4]), 1})
+            TInsert(verts, string.pack(vertPackS, tonumber(data[2]), tonumber(data[3]), tonumber(data[4]), 1))
 
         -- TODO: Vertex normals, could do shading eventually
         elseif data[1] == "vn" then
@@ -1052,7 +1055,8 @@ local function rasterizeMesh()
 
     -- First, project vertices
     for i = 1, loadedMesh.vertCount do
-        loadedMesh.pVert[i] = matrixMultiplyVector(matWorld, loadedMesh.vert[i])
+        local unpackedV = table.pack(string.unpack(vertPackS, loadedMesh.vert[i]))
+        loadedMesh.pVert[i] = matrixMultiplyVector(matWorld, unpackedV)
         loadedMesh.vsVert[i] = matrixMultiplyVector(matView, loadedMesh.pVert[i])
     end
 
@@ -1090,9 +1094,9 @@ local function rasterizeMesh()
             -- TODO: Is there a quick check we can perform to skip this step for tris beyond the near plane?
             local clippedTris, clipped = 0, {{}, {}}
             clippedTris, clipped[1], clipped[2] = triClipPlane(nearPlane, nearNormal, {
-               {loadedMesh.vsVert[loadedMesh.tris[i][1][1]],
-                loadedMesh.vsVert[loadedMesh.tris[i][1][2]],
-                loadedMesh.vsVert[loadedMesh.tris[i][1][3]]},
+                {loadedMesh.vsVert[loadedMesh.tris[i][1][1]],
+                 loadedMesh.vsVert[loadedMesh.tris[i][1][2]],
+                 loadedMesh.vsVert[loadedMesh.tris[i][1][3]]},
                {{loadedMesh.tris[i][2][1][1], loadedMesh.tris[i][2][1][2], loadedMesh.tris[i][2][1][3]},
                 {loadedMesh.tris[i][2][2][1], loadedMesh.tris[i][2][2][2], loadedMesh.tris[i][2][2][3]},
                 {loadedMesh.tris[i][2][3][1], loadedMesh.tris[i][2][3][2], loadedMesh.tris[i][2][3][3]}}

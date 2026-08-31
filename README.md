@@ -96,6 +96,7 @@ You can translate around the scene using WASD and rotate using arrow keys. That'
 | -b  | Blends the model into the background color using that pixel's depth buffer value. Can be combined with -s for a cool (yet laggy) render |
 | -r  | Rotates the model on all 3 axis. If you want to pick which axis the model spins on, you can specify with -x, -y, and -z. |
 | -w  | Renders the wireframe over the rasterized triangles |
+| -f  | Grayscale flat shading based on per-triangle light value |
 
 **PERFORMANCE**
 

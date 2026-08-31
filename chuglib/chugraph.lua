@@ -300,7 +300,10 @@ local function NewDrawFrame()
                 if xSkipIndex + x > funcWidth then break end
             end
 
-            set(fillGroup[1], fillGroup[2], fillGroup[3], fillGroup[4], Concat(charString))
+            GPUSetFG(fillGroup[3]); currentForeground = fillGroup[3]
+            GPUSetBG(fillGroup[4]); currentBackground = fillGroup[4]
+            GPUSet(fillGroup[1], fillGroup[2], Concat(charString))
+            -- set(fillGroup[1], fillGroup[2], fillGroup[3], fillGroup[4], Concat(charString))
 
             fillGroup = nil
             charString = nil
@@ -966,8 +969,7 @@ local random = math.random
 local function drawDemoGraphics(x, y, width, height)
     ClearScreen()
 
-    -- Run a gpu function n times
-
+    -- Benchmark whatever function needs to be tested
     if debugDoBenchmark then
 
         -- ~20fps at 1300 set + foreground swap

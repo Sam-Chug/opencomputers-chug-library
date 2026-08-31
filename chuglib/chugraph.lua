@@ -200,12 +200,12 @@ local function DrawFrame()
             if drawBuffer[y * funcWidth + x + xSkipIndex] then goto startGroup
             elseif not drawBuffer[(y + 1) * funcWidth + x + xSkipIndex] then goto continue end
 
-            ::startGroup::
             -- Fore is the color of the first pixel put to the screen, (favor top-most pixel?)
             -- Back is the background of the first pixel put to the screen
             -- If initially the same, set back to the first available second
 
             -- Mark pixel as finished updating
+            ::startGroup::
             drawBuffer[indexTop] = false
             drawBuffer[indexBot] = false
 
@@ -331,14 +331,7 @@ local function DrawFrame()
         xSkipIndex = 0
     end
     -- Finally, draw and apply new frame data, then reset update value for all pixels
-    -- drawCharGroup(drawGroup)
-    for rKey, rVal in pairs(drawGroup) do
-        for cKey, cVal in pairs(rVal) do
-            for i = 1, #cVal[1] do
-                set(cVal[1][i], cVal[2][i], rKey, cKey, cVal[3][i])
-            end
-        end
-    end
+    drawCharGroup(drawGroup)
     drawGroup = nil
 end
 
@@ -498,6 +491,7 @@ local function BlendColor(c1, c2, amount)
         c1, c2 = c2, c1
     end
     local blend = Min(amount, 1)
+    if blend < 0.4 then blend = 0 end
 
     local r1 = (c1 >> 16) / 255
     local g1 = ((c1 % 65536) >> 8) / 255
@@ -829,17 +823,12 @@ end
 
 createColorLUTs()
 local random = math.random
+-- TODO: Make separate demo functions and loop them by pressing some key
 local function drawDemoGraphics(x, y, width, height)
-
-    -- TODO: Make separate demo functions and loop them by pressing some key
     ClearScreen()
 
     -- Run a gpu function n times
     if debugDoBenchmark then
-        -- set = 3000
-        -- setFG, setBG = 2600
-        -- fill = 2000
-        -- Benchmark gpu commands
         for i = 1, 2800 do
             gpu.get((i % 50) + 1, (i % 50) + 1)
         end

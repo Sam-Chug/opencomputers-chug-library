@@ -139,62 +139,25 @@ end
 local vertPackS = "fffB"
 local uvPackS = "ffB"
 
--- For default cube mesh, this is probably stupid but I can't think of a clean way to merge this below
-local function getMeshFromText(text)
-    local verts, uvs, vInd, uInd = {}, {}, {}, {}
-    local pointData = {}
-    for i = 1, #text do
-        local line = text[i]
-        local data = {}
-        for item in line:gmatch("%S+") do
-            TInsert(data, item)
-        end
-        if data == nil or data[1] == nil then goto continue end
-
-        -- Vertex position
-        if data[1] == "v" then
-            TInsert(verts, string.pack(vertPackS, tonumber(data[2]), tonumber(data[3]), tonumber(data[4]), 1))
-
-        -- UVs
-        elseif data[1] == "vt" then
-            TInsert(uvs, string.pack(uvPackS, tonumber(data[2]), tonumber(data[3]), 1))
-
-        -- Face data
-        elseif data[1] == "f" then
-
-            -- Check if face data packs other information inside
-            local _, parts = data[2]:gsub("/", "")
-
-            -- If more information than points given, then parse it
-            if parts == 1 then
-
-                pointData = {}
-                for j = 1, 3 do
-                    for item in data[1 + j]:gmatch("%d+") do
-                        TInsert(pointData, tonumber(item))
-                    end
-                end
-                -- Create triangle, get its vertex indices and uv coordiantes
-                TInsert(vInd, {pointData[1], pointData[3], pointData[5]})
-                TInsert(uInd, {pointData[2], pointData[4], pointData[6]})
-            end
-        end
-        data = nil
-        line = nil
-        ::continue::
-    end
-    pointData = nil
-    return verts, uvs, vInd, uInd
-end
-
--- Load .obj from file at filenam, parse vertex/face data and build a list of triangles from it 
-local function getMeshFromFile(filename)
+-- Load .obj from file at filenam, parse vertex/face data and build a list of triangles from it
+-- Hamfisted to work with both importing a file and a mesh string
+local function getMeshFromString(filename, meshData, loadFile)
     local verts, uvs, vInd, uInd = {}, {}, {}, {}
     local pointData = {}
     local hasUvs = false
-    for line in io.lines(filename) do
+
+    local lines = {}
+    if loadFile then
+        for line in io.lines(filename) do
+            TInsert(lines, line)
+        end
+    else 
+        lines = meshData
+    end
+
+    for i = 1, #lines do
         local data = {}
-        for item in line:gmatch("%S+") do
+        for item in lines[i]:gmatch("%S+") do
             TInsert(data, item)
         end
         if data == nil or data[1] == nil then goto continue end
@@ -251,7 +214,7 @@ local function getMeshFromFile(filename)
                 TInsert(uInd, {1, 2, 3})
             end
         end
-        data, line = nil, nil
+        data, lines[i] = nil, nil
         ::continue::
     end
     -- If no UVs loaded, then make a list of dummy coordinates to index into
@@ -597,10 +560,10 @@ local function createMesh()
 
     -- TODO: Look for texture with the same name as the loaded mesh and load it as well
     if fileExists(modelFile) then
-        loadedMesh.vert, loadedMesh.uvs, loadedMesh.vInd, loadedMesh.uInd = getMeshFromFile(modelFile)
+        loadedMesh.vert, loadedMesh.uvs, loadedMesh.vInd, loadedMesh.uInd = getMeshFromString(modelFile, nil, true)
     else
         modelFile = "default-cube-fallback"
-        loadedMesh.vert, loadedMesh.uvs, loadedMesh.vInd, loadedMesh.uInd = getMeshFromText(defaultCubeOBJ)
+        loadedMesh.vert, loadedMesh.uvs, loadedMesh.vInd, loadedMesh.uInd = getMeshFromString(nil, defaultCubeOBJ, false)
     end
 
     -- Get tricount

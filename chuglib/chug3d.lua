@@ -142,6 +142,7 @@ local uvPackS = "ffB"
 -- For default cube mesh, this is probably stupid but I can't think of a clean way to merge this below
 local function getMeshFromText(text)
     local verts, uvs, vInd, uInd = {}, {}, {}, {}
+    local pointData = {}
     for i = 1, #text do
         local line = text[i]
         local data = {}
@@ -167,7 +168,7 @@ local function getMeshFromText(text)
             -- If more information than points given, then parse it
             if parts == 1 then
 
-                local pointData = {}
+                pointData = {}
                 for j = 1, 3 do
                     for item in data[1 + j]:gmatch("%d+") do
                         TInsert(pointData, tonumber(item))
@@ -182,12 +183,14 @@ local function getMeshFromText(text)
         line = nil
         ::continue::
     end
+    pointData = nil
     return verts, uvs, vInd, uInd
 end
 
 -- Load .obj from file at filenam, parse vertex/face data and build a list of triangles from it 
 local function getMeshFromFile(filename)
     local verts, uvs, vInd, uInd = {}, {}, {}, {}
+    local pointData = {}
     local hasUvs = false
     for line in io.lines(filename) do
         local data = {}
@@ -219,7 +222,7 @@ local function getMeshFromFile(filename)
             if parts == 1 then
                 -- Vertex/UV
 
-                local pointData = {}
+                pointData = {}
                 for i = 1, 3 do
                     for item in data[1 + i]:gmatch("%d+") do
                         TInsert(pointData, tonumber(item))
@@ -232,7 +235,7 @@ local function getMeshFromFile(filename)
             elseif parts == 2 then
                 -- Vertex/UV/Vertex-Normal
 
-                local pointData = {}
+                pointData = {}
                 for i = 1, 3 do
                     for item in data[1 + i]:gmatch("%d+") do
                         TInsert(pointData, tonumber(item))
@@ -255,6 +258,7 @@ local function getMeshFromFile(filename)
     if not hasUvs then
         uvs = {string.pack(uvPackS, 0, 0, 1), string.pack(uvPackS, 0, 1, 1), string.pack(uvPackS, 1, 1, 1)}
     end
+    pointData = nil
     return verts, uvs, vInd, uInd
 end
 
@@ -303,12 +307,11 @@ local function vCrossProduct(v1, v2)
 end
 
 -- Get position at which vector intersects plane
+local lineStartToEnd, lineToIntersect = {0, 0, 0, 0}, {0, 0, 0, 0}
 local function vIntersectPlane(planeDP, ad, bd, lineStart, lineEnd)
     local t = (planeDP - ad) / (bd - ad)
-    local lineStartToEnd = vSub(lineEnd, lineStart)
-    local lineToIntersect = vMul(lineStartToEnd, t)
-
-    lineStartToEnd = nil
+    lineStartToEnd = vSub(lineEnd, lineStart)
+    lineToIntersect = vMul(lineStartToEnd, t)
     return vAdd(lineStart, lineToIntersect), t
 end
 
@@ -507,7 +510,6 @@ local function mMultiplyMatrix(m1, m2)
     end
     return matrix
 end
-
 
 local function mPointAt(pos, target, up)
     local newForward = vSub(target, pos)
@@ -882,16 +884,16 @@ local planeTopN, planeBotN, planeLeftN, planeRightN = {0, 1, 0}, {0, -1, 0}, {1,
 
 -- Clip each triangle against each side of the viewport
 -- After clipping, rasterize each triangle
-local function viewportClipTriangle(trisToRaster)
+local function viewportClipTriangle(rasterTris)
 
     -- Check if any points are outside of screenspace
     local nNewTriangles = 1
-    if trisToRaster[1][1][1][1] < 1 or trisToRaster[1][1][1][1] > screenWidth then goto clipTri end
-    if trisToRaster[1][1][2][1] < 1 or trisToRaster[1][1][2][1] > screenWidth then goto clipTri end
-    if trisToRaster[1][1][3][1] < 1 or trisToRaster[1][1][3][1] > screenWidth then goto clipTri end
-    if trisToRaster[1][1][1][2] < 1 or trisToRaster[1][1][1][2] > screenHeight then goto clipTri end
-    if trisToRaster[1][1][2][2] < 1 or trisToRaster[1][1][2][2] > screenHeight then goto clipTri end
-    if trisToRaster[1][1][3][2] < 1 or trisToRaster[1][1][3][2] > screenHeight then goto clipTri end
+    if rasterTris[1][1][1][1] < 1 or rasterTris[1][1][1][1] > screenWidth then goto clipTri end
+    if rasterTris[1][1][2][1] < 1 or rasterTris[1][1][2][1] > screenWidth then goto clipTri end
+    if rasterTris[1][1][3][1] < 1 or rasterTris[1][1][3][1] > screenWidth then goto clipTri end
+    if rasterTris[1][1][1][2] < 1 or rasterTris[1][1][1][2] > screenHeight then goto clipTri end
+    if rasterTris[1][1][2][2] < 1 or rasterTris[1][1][2][2] > screenHeight then goto clipTri end
+    if rasterTris[1][1][3][2] < 1 or rasterTris[1][1][3][2] > screenHeight then goto clipTri end
     goto skipClip
 
     -- If points exist outside of screenspace, clip triangles against sides of viewport
@@ -901,7 +903,7 @@ local function viewportClipTriangle(trisToRaster)
         local nTrisToAdd = 0
         while nNewTriangles > 0 do
 
-            testTri = {trisToRaster[1][1], trisToRaster[1][2]}
+            testTri = {rasterTris[1][1], rasterTris[1][2]}
             nNewTriangles = nNewTriangles - 1
             nTrisToAdd = 1
 
@@ -932,14 +934,14 @@ local function viewportClipTriangle(trisToRaster)
 
             -- If no clipping occurred, just add triangle
             for w = 1, nTrisToAdd do
-                TInsert(trisToRaster, {vClipped[w][1], vClipped[w][2], trisToRaster[1][3], trisToRaster[1][4], trisToRaster[1][5]})
+                TInsert(rasterTris, {vClipped[w][1], vClipped[w][2], rasterTris[1][3], rasterTris[1][4], rasterTris[1][5]})
             end
 
-            TRemove(trisToRaster, 1)
+            TRemove(rasterTris, 1)
             vClipped = nil
             testTri = nil
         end
-        nNewTriangles = #trisToRaster
+        nNewTriangles = #rasterTris
     end
     ::skipClip::
 
@@ -949,17 +951,17 @@ local function viewportClipTriangle(trisToRaster)
 
         -- Draw wireframe
         if drawWireFrame then
-            DrawTriangle(trisToRaster[i][1], 0xFFFFFF)
+            DrawTriangle(rasterTris[i][1], 0xFFFFFF)
 
         -- Draw with texture
         elseif doDrawTextured then
-            texturedTriangle(trisToRaster[i][1], trisToRaster[i][2], trisToRaster[i])
+            texturedTriangle(rasterTris[i][1], rasterTris[i][2], rasterTris[i])
         end
 
         -- Debug
         trisDrawnLast = trisDrawnLast + 1
     end
-    trisToRaster = nil
+    rasterTris = nil
     rasterizeCumulative = rasterizeCumulative + (GetCPUTime() - rasterizeStart)
 end
 

@@ -389,6 +389,7 @@ local function ClearRegion(x, y, width, height)
     gpuUsageStats.fill = gpuUsageStats.fill + 1
 end
 
+-- TODO: This could probably be faster? Just reset the arrays or refactor so nil works as a zeroed value
 local function ClearScreen()
     ClearRegion(1, 1, funcWidth, funcHeight)
 end

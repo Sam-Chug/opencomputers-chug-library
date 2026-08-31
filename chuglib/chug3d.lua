@@ -144,7 +144,6 @@ local function fileExists(filename)
 end
 
 local vertPackS = "fffB"
-local vertVsPackS = "ffff"
 
 -- For default cube mesh, this is probably stupid but I can't think of a clean way to merge this below
 local function getMeshFromText(text)
@@ -896,8 +895,8 @@ local function texturedTriangle(p, u, tri)
     end
 end
 
--- Timing variables
 local rasterizeStart; local rasterizeCumulative = 0
+local clipTrisToRaster = {}
 
 -- Clip each triangle against each side of the viewport
 -- After clipping, rasterize each triangle
@@ -907,7 +906,7 @@ local function viewportClipTriangle(triToRaster)
     -- TODO: I hate creating this array if we dont need it (clipTrisToRaster)
     -- How can this cleanly be skipped and just draw the single triToRaster sent into the function
     local nNewTriangles = 1
-    local clipTrisToRaster = {{triToRaster[1], triToRaster[2], triToRaster[3], triToRaster[4], triToRaster[5]}}
+    clipTrisToRaster = {{triToRaster[1], triToRaster[2], triToRaster[3], triToRaster[4], triToRaster[5]}}
     if triToRaster[1][1][1] < 1 or triToRaster[1][1][1] > screenWidth then goto clipTri end
     if triToRaster[1][1][2] < 1 or triToRaster[1][1][2] > screenHeight then goto clipTri end
     if triToRaster[1][2][1] < 1 or triToRaster[1][2][1] > screenWidth then goto clipTri end
@@ -1028,12 +1027,10 @@ local function rasterizeMesh()
 
     -- Amount to translate model in scene
     -- TODO: This should probably be packed into the loadedMesh table
-    local matTrans = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
-    matTrans = matrixMakeTranslation(0, 0, 7.5)
+    local matTrans = matrixMakeTranslation(0, 0, 7.5)
 
     -- Build mesh rotation matrix, handles if mesh is rotating
-    local matWorld = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
-    matWorld = matrixMakeIdentity()
+    local matWorld = matrixMakeIdentity()
     matWorld = matrixMultiplyMatrix(matRotZ, matRotX)
     matWorld = matrixMultiplyMatrix(matWorld, matRotY)
     matWorld = matrixMultiplyMatrix(matWorld, matTrans)

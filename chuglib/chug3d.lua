@@ -39,13 +39,16 @@ local doDepthBlending = false
 local backgroundColor = 0x00DBFF            -- Color of the background in the scene
 local depthFadeDist = 0.4                   -- Square depth value by this value when blending colors into the background
 local bfcThreshold = 0.0                    -- Cull any face whos dot product against camera normal is above this
-local bfcLazyThreshold = 0.8                -- Lazy backface culling threshold. Faces turned this far away should be lazy occluded
 local lightDirection = {0.1, 0.1, -1}       -- [Sunlight-ish](0.3, 1, 0) | [Topdown-ish](0.1, 0.1, -1)
 local shadeMaximum = 5 / 16                 -- Maximum darkness in the most shaded areas
 local lightBias = 0.3                       -- Softens faces that are 90 degrees offset to light direction
 local fNear = 0.25                          -- Near plane distance
 local fFar = 1000                           -- Far plane distance
 local fFov = 90                             -- Field of view
+
+-- "Cheats" -> These methods can increase rendering speeds a lot, but with some sacrifice to visual fidelity
+-- They are no longer implemented, but may be re-introduced under a toggleable setting
+local bfcLazyThreshold = 0.8                -- Lazy backface culling threshold. Faces turned this far away should be lazy occluded
 local minRastArea = 0.1                     -- Any triangle with an area below this value will not be drawn
 
 local modelFile = "teapot.obj"              -- Default loaded model, pretty much just for debugging
@@ -722,15 +725,6 @@ local function texturedTriangle(p, u, tri)
     p[1][1] = p[1][1] // 1;  p[2][1] = p[2][1] // 1;  p[3][1] = p[3][1] // 1
     p[1][2] = p[1][2] // 1;  p[2][2] = p[2][2] // 1;  p[3][2] = p[3][2] // 1
 
-    -- TODO: Not too sure on this one ->
-    -- But I doubt this program will get to the point where a model is made from small enough tris for this to matter
-    -- local area = 0.5 * abs(
-    --     p[1][1] * (p[2][2] - p[3][2]) +
-    --     p[2][1] * (p[3][2] - p[1][2]) +
-    --     p[3][1] * (p[1][2] - p[2][2])
-    -- )
-    -- if area < minRastArea then goto skipRast end
-
     if (p[2][2] < p[1][2]) then
         p[1][1], p[2][1] = p[2][1], p[1][1]
         p[1][2], p[2][2] = p[2][2], p[1][2]
@@ -887,7 +881,6 @@ local function texturedTriangle(p, u, tri)
             t = t + tStep
         end
     end
-    ::skipRast::
 end
 
 local rasterizeStart; local rasterizeCumulative = 0

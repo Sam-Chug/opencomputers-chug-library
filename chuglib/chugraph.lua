@@ -323,7 +323,7 @@ local function DrawFrame()
             -- Add grouped pixels to list
             if drawGroup[fillGroup[3]] == nil then drawGroup[fillGroup[3]] = {} end
             if drawGroup[fillGroup[3]][fillGroup[4]] == nil then
-                drawGroup[fillGroup[3]][fillGroup[4]] = {{0}, {0}, {""}}
+                drawGroup[fillGroup[3]][fillGroup[4]] = {{}, {}, {}}
             end
             TableInsert(drawGroup[fillGroup[3]][fillGroup[4]][1], fillGroup[1])
             TableInsert(drawGroup[fillGroup[3]][fillGroup[4]][2], fillGroup[2])
@@ -957,7 +957,7 @@ local function demoGraphics()
             end
         end
 
-        drawDemoGraphics(5, 5, funcWidth - 5, funcHeight - 5)
+        drawDemoGraphics(5, 5, funcWidth - 10, funcHeight - 10)
         SetText(1, 1, 'Press "Q" To Exit Demo', 0xFFFFFF, 0x000000, false)
         UpdateScreen()
     end

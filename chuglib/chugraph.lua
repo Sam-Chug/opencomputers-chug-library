@@ -184,11 +184,11 @@ local function DrawFrame()
     -- Cache variables before iterating
     local xInc, yInc = 1, 2
     local xSkipIndex = 0
-    local fillGroup, drawGroup = {}, {}
+    local fillGroup, drawGroup, charString = {0, 0, 0, 0}, {}, {}
     local twoColCheck = false
     local startFore, startBack, startChar, startText = 0, 0, " ", false
     local newFore, newBack, newChar, newText = 0, 0, " ", false
-    local checkLen, indexTop, indexBot = 0, 0, 0
+    local checkLen, indexTop, indexBot, charsAdded = 0, 0, 0, 0
 
     for y = 1, funcHeight, yInc do -- For each line,
         for x = 1, funcWidth, xInc do -- Run each pixel,
@@ -214,8 +214,7 @@ local function DrawFrame()
 
             -- Start fill group
             fillGroup = {x + xSkipIndex, (y // yInc) + 1, startFore, startBack}
-            local charString = {startChar}; local charsAdded = 1
-            twoColCheck = false
+            charString = {startChar}; charsAdded = 1; twoColCheck = false
             while true do -- loop until non-matching pixel found
 
                 -- Get next pixel in row
@@ -325,6 +324,7 @@ local function DrawFrame()
             TableInsert(drawGroup[fillGroup[3]][fillGroup[4]][3], Concat(charString))
 
             fillGroup = nil
+            charString = nil
             ::continue::
         end
         ::skipx::
@@ -410,7 +410,11 @@ local function SetText(x, y, string, foreColor, backColor, vertical)
 end
 
 local function SetPixel(x, y, color)
-    addToFrameBuffer(x, y, color)
+    x = x // 1; y = y // 1
+    if x < 1 or x > funcWidth or y < 1 or y > funcHeight then return end
+
+    -- Set pixel data from function args
+    packPixel(x, y, color, nil, nil, true)
 end
 
 local function GetAspectRatio()

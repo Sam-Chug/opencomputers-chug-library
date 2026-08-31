@@ -2,7 +2,7 @@ local component = require("component")
 local shell = require("shell")
 local _, ops = shell.parse(...)
 local computer = require("computer")
-local version = "0.2.1a"
+local version = "0.3.0a"
 
 -- ============================================================
 -- CREDITS:
@@ -693,6 +693,8 @@ end
 -- Draw triangle based on cl args
 local function drawTexturedTriangle(x, y, tri, texU, texV, texW)
     -- TODO: More of these should be combinable
+    -- Also should be re-ordered based on whatever is most commonly used? Or just rewritten more elegantly
+
     -- Greyscale depth buffer
     if doDepthBufferColoring then
         SetPixel(x, y, GetGreyscaleColor(texW))
@@ -713,6 +715,7 @@ local function drawTexturedTriangle(x, y, tri, texU, texV, texW)
     elseif doDrawFlatShaded then
         SetPixel(x, y, GetGreyscaleColor(tri[5]))
 
+    -- Texture with shading based on per-triangle lighting
     elseif doShadedColoring then
         local sampleColor = uvSampleTexture(texU / texW, texV / texW, tri[3])
         SetPixel(x, y, GetShadedColor(sampleColor, tri[5]))

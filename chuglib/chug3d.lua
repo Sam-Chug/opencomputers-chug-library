@@ -125,15 +125,7 @@ local loadedTextures = {{name = "missingTex", w = #missingTex, h = #missingTex[1
 -- .OBJ MESH LOADING
 -- ============================================================
 
--- Triangle to store loaded mesh data
--- Vert indices are saved instead of vert values
--- TODO: Look into storing uv indices as well
--- VertIndex, Uvs, Texture, Color, Lighting
-local function MemTriangle()
-    return {{0, 0, 0}, {0, 0, 0}, 1, 1, 1}
-end
-
-
+-- Check if file exists
 local function fileExists(filename)
     local f = io.open(filename, "r")
     if f then
@@ -1041,8 +1033,7 @@ local function rasterizeMesh()
 
     -- First, project vertices
     for i = 1, loadedMesh.vertCount do
-        local unpackedV = table.pack(string.unpack(vertPackS, loadedMesh.vert[i]))
-        matrixMultiplyVectorR(loadedMesh.pVert[i], matWorld, unpackedV)
+        matrixMultiplyVectorR(loadedMesh.pVert[i], matWorld, table.pack(string.unpack(vertPackS, loadedMesh.vert[i])))
         matrixMultiplyVectorR(loadedMesh.vsVert[i], matView, loadedMesh.pVert[i])
     end
 

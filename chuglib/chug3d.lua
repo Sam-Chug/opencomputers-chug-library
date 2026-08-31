@@ -1256,6 +1256,12 @@ local function main()
     ClearScreen()
     createMesh()
     gpu.SetSceneBackground(backgroundColor)
+
+    -- Force garbage collection before starting
+    for i = 1, 10 do
+        os.sleep(0)
+    end
+
     while true do
 
         -- update elapsed time

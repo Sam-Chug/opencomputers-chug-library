@@ -102,10 +102,8 @@ local TInsert = table.insert; local TRemove = table.remove
 local defaultCubeOBJ = {
     "v -0.5 0.5 0.5", "v -0.5 -0.5 0.5", "v -0.5 0.5 -0.5", "v -0.5 -0.5 -0.5",
     "v 0.5 0.5 0.5", "v 0.5 -0.5 0.5", "v 0.5 0.5 -0.5", "v 0.5 -0.5 -0.5",
-    "vt 0.875 0.5", "vt 0.625 0.75", "vt 0.625 0.5", "vt 0.375 1",
-    "vt 0.375 0.75", "vt 0.625 0", "vt 0.375 0.25", "vt 0.375 0",
-    "vt 0.375 0.5", "vt 0.125 0.75", "vt 0.125 0.5", "vt 0.625 0.25",
-    "vt 0.875 0.75", "vt 0.625 1",
+    "vt 0.875 0.5", "vt 0.625 0.75", "vt 0.625 0.5", "vt 0.375 1", "vt 0.375 0.75", "vt 0.625 0", "vt 0.375 0.25",
+    "vt 0.375 0", "vt 0.375 0.5", "vt 0.125 0.75", "vt 0.125 0.5", "vt 0.625 0.25", "vt 0.875 0.75", "vt 0.625 1",
     "f 5/1 3/2 1/3", "f 3/2 8/4 4/5", "f 7/6 6/7 8/8", "f 2/9 8/10 6/11", "f 1/3 4/5 2/9", "f 5/12 2/9 6/7",
     "f 5/1 7/13 3/2", "f 3/2 7/14 8/4", "f 7/6 5/12 6/7", "f 2/9 4/5 8/10", "f 1/3 3/2 4/5", "f 5/12 1/3 2/9"
 }
@@ -131,7 +129,7 @@ local loadedTextures = {{name = "missingTex", w = #missingTex, h = #missingTex[1
 -- TODO: Look into storing uv indices as well
 -- VertIndex, Uvs, Texture, Color, Lighting
 local function MemTriangle()
-    return {{0, 0, 0}, {{0, 0, 1}, {0, 1, 1}, {1, 1, 1}}, 1, 1, 1}
+    return {{0, 0, 0}, {0, 0, 0}, 1, 1, 1}
 end
 
 
@@ -145,6 +143,7 @@ local function fileExists(filename)
 end
 
 local vertPackS = "fffB"
+local uvPackS = "ffB"
 
 -- For default cube mesh, this is probably stupid but I can't think of a clean way to merge this below
 local function getMeshFromText(text)
@@ -163,7 +162,7 @@ local function getMeshFromText(text)
 
         -- UVs
         elseif data[1] == "vt" then
-            TInsert(uvs, {tonumber(data[2]), tonumber(data[3])})
+            TInsert(uvs, string.pack(uvPackS, tonumber(data[2]), tonumber(data[3]), 1))
 
         -- Face data
         elseif data[1] == "f" then
@@ -182,10 +181,8 @@ local function getMeshFromText(text)
                 end
                 -- Create triangle, get its vertex indices and uv coordiantes
                 local newTri = MemTriangle()
-                newTri[1] =  {pointData[1], pointData[3], pointData[5]}
-                newTri[2] = {{uvs[pointData[2]][1], uvs[pointData[2]][2], 1},
-                             {uvs[pointData[4]][1], uvs[pointData[4]][2], 1},
-                             {uvs[pointData[6]][1], uvs[pointData[6]][2], 1}}
+                newTri[1] = {pointData[1], pointData[3], pointData[5]}
+                newTri[2] = {pointData[2], pointData[4], pointData[6]}
                 TInsert(tris, newTri)
             end
         end
@@ -193,13 +190,13 @@ local function getMeshFromText(text)
         line = nil
         ::continue::
     end
-    uvs = nil
-    return tris, verts
+    return tris, verts, uvs
 end
 
 -- Load .obj from file at filenam, parse vertex/face data and build a list of triangles from it 
 local function getMeshFromFile(filename)
     local tris, verts, uvs = {}, {}, {}
+    local hasUvs = false
     for line in io.lines(filename) do
         local data = {}
         for item in line:gmatch("%S+") do
@@ -217,7 +214,8 @@ local function getMeshFromFile(filename)
 
         -- UVs
         elseif data[1] == "vt" then
-            TInsert(uvs, {tonumber(data[2]), tonumber(data[3])})
+            hasUvs = true
+            TInsert(uvs, string.pack(uvPackS, tonumber(data[2]), tonumber(data[3]), 1))
 
         -- Face data
         elseif data[1] == "f" then
@@ -237,10 +235,8 @@ local function getMeshFromFile(filename)
                 end
 
                 local newTri = MemTriangle()
-                newTri[1] =  {pointData[1], pointData[3], pointData[5]}
-                newTri[2] = {{uvs[pointData[2]][1], uvs[pointData[2]][2], 1},
-                             {uvs[pointData[4]][1], uvs[pointData[4]][2], 1},
-                             {uvs[pointData[6]][1], uvs[pointData[6]][2], 1}}
+                newTri[1] = {pointData[1], pointData[3], pointData[5]}
+                newTri[2] = {pointData[2], pointData[4], pointData[6]}
                 TInsert(tris, newTri)
 
             elseif parts == 2 then
@@ -254,24 +250,26 @@ local function getMeshFromFile(filename)
                 end
 
                 local newTri = MemTriangle()
-                newTri[1] =  {pointData[1], pointData[4], pointData[7]}
-                newTri[2] = {{uvs[pointData[2]][1], uvs[pointData[2]][2], 1},
-                             {uvs[pointData[5]][1], uvs[pointData[5]][2], 1},
-                             {uvs[pointData[8]][1], uvs[pointData[8]][2], 1}}
+                newTri[1] = {pointData[1], pointData[4], pointData[7]}
+                newTri[2] = {pointData[2], pointData[5], pointData[8]}
                 TInsert(tris, newTri)
 
             -- Otherwise, just grab the verts
             else
                 local newTri = MemTriangle()
                 newTri[1] = {tonumber(data[2]), tonumber(data[3]), tonumber(data[4])}
+                newTri[2] = {1, 2, 3}
                 TInsert(tris, newTri)
             end
         end
         data, line = nil, nil
         ::continue::
     end
-    uvs = nil
-    return tris, verts
+    -- If no UVs loaded, then make a list of dummy coordinates to index into
+    if not hasUvs then
+        uvs = {string.pack(uvPackS, 0, 0, 1), string.pack(uvPackS, 0, 1, 1), string.pack(uvPackS, 1, 1, 1)}
+    end
+    return tris, verts, uvs
 end
 
 -- ============================================================
@@ -607,20 +605,20 @@ local function createMesh()
 
     -- Load model, or default to the cube
     -- Verts, Projected Verts, Viewspace Verts, Tris, Textures, Lazy BF Count Tricount, Vertcount
-    loadedMesh = {vert = {}, pVert = {}, vsVert = {}, tris = {}, 0, lbfc = {}, triCount = 0, vertCount = 0}
+    loadedMesh = {vert = {}, pVert = {}, vsVert = {}, uvs = {}, tris = {}, 0, lbfc = {}, triCount = 0, vertCount = 0}
 
     -- Get default-cube if that's what we really want
     if modelFile == "default-cube" then
-        loadedMesh.tris, loadedMesh.vert = getMeshFromText(defaultCubeOBJ)
+        loadedMesh.tris, loadedMesh.vert, loadedMesh.uvs = getMeshFromText(defaultCubeOBJ)
 
     -- Otherwise, get model from specified model file, if it exists
     else
         -- TODO: Look for texture with the same name as the loaded mesh and load it as well
         if fileExists(modelFile) then
-            loadedMesh.tris, loadedMesh.vert = getMeshFromFile(modelFile)
+            loadedMesh.tris, loadedMesh.vert, loadedMesh.uvs = getMeshFromFile(modelFile)
         else
             modelFile = "default-cube-fallback"
-            loadedMesh.tris, loadedMesh.vert = getMeshFromText(defaultCubeOBJ)
+            loadedMesh.tris, loadedMesh.vert, loadedMesh.uvs = getMeshFromText(defaultCubeOBJ)
         end
     end
 
@@ -1087,9 +1085,9 @@ local function rasterizeMesh()
                 {loadedMesh.vsVert[loadedMesh.tris[i][1][1]],
                  loadedMesh.vsVert[loadedMesh.tris[i][1][2]],
                  loadedMesh.vsVert[loadedMesh.tris[i][1][3]]},
-               {{loadedMesh.tris[i][2][1][1], loadedMesh.tris[i][2][1][2], loadedMesh.tris[i][2][1][3]},
-                {loadedMesh.tris[i][2][2][1], loadedMesh.tris[i][2][2][2], loadedMesh.tris[i][2][2][3]},
-                {loadedMesh.tris[i][2][3][1], loadedMesh.tris[i][2][3][2], loadedMesh.tris[i][2][3][3]}}
+                {table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.tris[i][2][1]])),
+                 table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.tris[i][2][2]])),
+                 table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.tris[i][2][3]]))}
             })
 
             projectionCumulative = projectionCumulative + (GetCPUTime() - projectionStart) -- Timing point end

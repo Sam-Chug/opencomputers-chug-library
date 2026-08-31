@@ -576,8 +576,11 @@ end
 
 -- Return nearest valid hex color from input RGB values (0 - 1)
 local function ValidHexFromRGB(r, g, b)
+    -- Experiment with crushing the palette a bit, to save on swapping fore and background colors.
+    -- Greens can be cut in half without much color loss
     r = (r // 0.17) * 51
     g = ((g // 0.125) * 36.5) // 1
+    -- g = Min(((g // 0.25) * 73) // 1, 255)
     b = Min((b // 0.25) * 64, 255)
     return (r << 16) + (g << 8) + b
 end
@@ -648,12 +651,15 @@ local function BlendColor(c1, c2, amount)
     local rNew = r1 + (rDiff * blend)
     local gNew = g1 + (gDiff * blend)
     local bNew = b1 + (bDiff * blend)
-    local greyRGB = GetGreyscaleColor((rNew + gNew + bNew) / 3)
+    return ValidHexFromRGB(rNew, gNew, bNew)
 
-    local realRGB = ((rNew * 255 // 1) << 16) + ((gNew * 255 // 1) << 8) + (bNew * 255 // 1)
-    local hexRGB = ValidHexFromRGB(rNew, gNew, bNew)
-    if Abs(hexRGB - realRGB) < Abs(greyRGB - realRGB) then return hexRGB
-    else return greyRGB end
+    -- If we want a truer blend, enable returning grays here.
+    -- Even if a grayscale color may be closer, they usually look out of place, so this is disabled for now.
+    -- local realRGB = ((rNew * 255 // 1) << 16) + ((gNew * 255 // 1) << 8) + (bNew * 255 // 1)
+    -- local greyRGB = GetGreyscaleColor((rNew + gNew + bNew) / 3)
+    -- local hexRGB = ValidHexFromRGB(rNew, gNew, bNew)
+    -- if Abs(hexRGB - realRGB) < Abs(greyRGB - realRGB) then return hexRGB
+    -- else return greyRGB end
 end
 
 -- TODO: Probably could be optimized, think about it later

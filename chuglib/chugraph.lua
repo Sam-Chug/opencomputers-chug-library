@@ -627,13 +627,11 @@ end
 -- Third agument is the amount of the second color to blend:
 -- 0 -> outputs color 1 and 1 -> outputs color 2
 local function BlendColor(c1, c2, amount)
-    -- Isolate RGB values from both colors
-    if c1 > c2 then
-        c1, c2 = c2, c1
-    end
-    local blend = Min(amount, 1)
-    if blend < 0.4 then blend = 0 end
 
+    local blend = 1 - amount
+    blend = Max(Min(blend, 1), 0)
+
+    -- Isolate RGB values from both colors
     local r1 = (c1 >> 16) / 255
     local g1 = ((c1 % 65536) >> 8) / 255
     local b1 = (c1 % 256) / 255

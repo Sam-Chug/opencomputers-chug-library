@@ -100,9 +100,7 @@ You can translate around the scene using WASD and rotate using arrow keys. That'
 
 **PERFORMANCE**
 
-I am quite proud of how far this project has come performance-wise, its almost 4x faster than when I finished the tutorial the original code was based on. I don't know if that's a good mark on the tutorial I followed, but what I know for sure is that I would much rather be using c++ than lua
-
-That performance came at the cost of readability though, and I apologize if you were looking towards this code for some form of guidance. I'm not that great of a coder anyways, actually I'm pretty bad.
+I am quite proud of how far this project has come performance-wise, its almost 6x faster than when I finished the tutorial the original code was based on. That performance came at the cost of readability though, and I apologize if you were looking towards this code for some form of guidance. I'm not that great of a coder anyways, actually I'm pretty bad.
 
 All things considered, most of the nerfs to readability come from memory optimizations. I love OpenComputers, but why are we sticking such a garbage-producing language into a computer with only 2MB of memory? I mean come on.
 

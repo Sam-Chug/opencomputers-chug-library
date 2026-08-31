@@ -265,43 +265,38 @@ end
 -- ============================================================
 
 -- Add one vector to another
-local function vectorAdd(v1, v2)
+local function vAdd(v1, v2)
     return {v1[1] + v2[1], v1[2] + v2[2], v1[3] + v2[3], 1}
 end
 
 -- Subtract one vector from another
-local function vectorSub(v1, v2)
+local function vSub(v1, v2)
     return {v1[1] - v2[1], v1[2] - v2[2], v1[3] - v2[3], 1}
 end
 
 -- Multiply vector by a value K
-local function vectorMul(v1, k)
+local function vMul(v1, k)
     return {v1[1] * k, v1[2] * k, v1[3] * k, 1}
 end
 
 -- Divide vector by a value K
-local function vectorDiv(v1, k)
+local function vDiv(v1, k)
     return {v1[1] / k, v1[2] / k, v1[3] / k, 1}
 end
 
 -- Get dot product of two input vectors
-local function vectorDotProduct(v1, v2)
+local function vDotProduct(v1, v2)
     return v1[1] * v2[1] + v1[2] * v2[2] + v1[3] * v2[3]
 end
 
--- Get length of vector
-local function vectorLength(v)
-    return vectorDotProduct(v, v) ^ -0.5
-end
-
 -- Normalize vector between -1 and 1
-local function vectorNormalize(v)
-    local l = vectorLength(v)
+local function vNormalize(v)
+    local l = vDotProduct(v, v) ^ -0.5
     return {v[1] * l, v[2] * l, v[3] * l, 1}
 end
 
 -- Get cross product of two input vectors
-local function vectorCrossProduct(v1, v2)
+local function vCrossProduct(v1, v2)
     local v = {0, 0, 0, 1}
     v[1] = v1[2] * v2[3] - v1[3] * v2[2]
     v[2] = v1[3] * v2[1] - v1[1] * v2[3]
@@ -310,13 +305,13 @@ local function vectorCrossProduct(v1, v2)
 end
 
 -- Get position at which vector intersects plane
-local function vectorIntersectPlane(planeDP, ad, bd, lineStart, lineEnd)
+local function vIntersectPlane(planeDP, ad, bd, lineStart, lineEnd)
     local t = (planeDP - ad) / (bd - ad)
-    local lineStartToEnd = vectorSub(lineEnd, lineStart)
-    local lineToIntersect = vectorMul(lineStartToEnd, t)
+    local lineStartToEnd = vSub(lineEnd, lineStart)
+    local lineToIntersect = vMul(lineStartToEnd, t)
 
     lineStartToEnd = nil
-    return vectorAdd(lineStart, lineToIntersect), t
+    return vAdd(lineStart, lineToIntersect), t
 end
 
 local insidePi = {0, 0, 0}; local outsidePi = {0, 0, 0}
@@ -360,19 +355,19 @@ local function triClipPlane(planeDP, planeN, inTri)
         local outTri1 = {{inTri[1][insidePi[1]], {0, 0, 0, 1}, {0, 0, 0, 1}}, {{inTri[2][insideTi[1]][1], inTri[2][insideTi[1]][2], inTri[2][insideTi[1]][3]}, {0, 0, 1}, {0, 0, 1}}}
 
         local t
-        local lsDP = vectorDotProduct(inTri[1][insidePi[1]], planeN)
-        outTri1[1][2], t = vectorIntersectPlane(
+        local lsDP = vDotProduct(inTri[1][insidePi[1]], planeN)
+        outTri1[1][2], t = vIntersectPlane(
             planeDP,
-            lsDP, vectorDotProduct(inTri[1][outsidePi[1]], planeN),
+            lsDP, vDotProduct(inTri[1][outsidePi[1]], planeN),
             inTri[1][insidePi[1]], inTri[1][outsidePi[1]]
         )
         outTri1[2][2][1] = t * (inTri[2][outsideTi[1]][1] - inTri[2][insideTi[1]][1]) + inTri[2][insideTi[1]][1]
         outTri1[2][2][2] = t * (inTri[2][outsideTi[1]][2] - inTri[2][insideTi[1]][2]) + inTri[2][insideTi[1]][2]
         outTri1[2][2][3] = t * (inTri[2][outsideTi[1]][3] - inTri[2][insideTi[1]][3]) + inTri[2][insideTi[1]][3]
 
-        outTri1[1][3], t = vectorIntersectPlane(
+        outTri1[1][3], t = vIntersectPlane(
             planeDP,
-            lsDP, vectorDotProduct(inTri[1][outsidePi[2]], planeN),
+            lsDP, vDotProduct(inTri[1][outsidePi[2]], planeN),
             inTri[1][insidePi[1]], inTri[1][outsidePi[2]]
         )
         outTri1[2][3][1] = t * (inTri[2][outsideTi[2]][1] - inTri[2][insideTi[1]][1]) + inTri[2][insideTi[1]][1]
@@ -390,10 +385,10 @@ local function triClipPlane(planeDP, planeN, inTri)
         local outTri2 = {{{0, 0, 0, 1}, {0, 0, 0, 1}, {0, 0, 0, 1}}, {{0, 0, 1}, {0, 0, 1}, {0, 0, 1}}}
 
         local t
-        local leDP = vectorDotProduct(inTri[1][outsidePi[1]], planeN)
-        outTri1[1][3], t = vectorIntersectPlane(
+        local leDP = vDotProduct(inTri[1][outsidePi[1]], planeN)
+        outTri1[1][3], t = vIntersectPlane(
             planeDP,
-            vectorDotProduct(inTri[1][insidePi[1]], planeN), leDP,
+            vDotProduct(inTri[1][insidePi[1]], planeN), leDP,
             inTri[1][insidePi[1]], inTri[1][outsidePi[1]]
         )
         outTri1[2][3][1] = t * (inTri[2][outsideTi[1]][1] - inTri[2][insideTi[1]][1]) + inTri[2][insideTi[1]][1]
@@ -405,9 +400,9 @@ local function triClipPlane(planeDP, planeN, inTri)
 
         outTri2[1][2] = {outTri1[1][3][1], outTri1[1][3][2], outTri1[1][3][3], outTri1[1][3][4]}
         outTri2[2][2] = {outTri1[2][3][1], outTri1[2][3][2], outTri1[2][3][3]}
-        outTri2[1][3], t = vectorIntersectPlane(
+        outTri2[1][3], t = vIntersectPlane(
             planeDP,
-            vectorDotProduct(inTri[1][insidePi[2]], planeN), leDP,
+            vDotProduct(inTri[1][insidePi[2]], planeN), leDP,
             inTri[1][insidePi[2]], inTri[1][outsidePi[1]]
         )
         outTri2[2][3][1] = t * (inTri[2][outsideTi[1]][1] - inTri[2][insideTi[2]][1]) + inTri[2][insideTi[2]][1]
@@ -421,7 +416,7 @@ local function triClipPlane(planeDP, planeN, inTri)
 end
 
 -- Return vector i multiplied by matrix m
-local function matrixMultiplyVector(m, i)
+local function mMultiplyVector(m, i)
     local v = {0, 0, 0, 0}
     v[1] = i[1] * m[1][1] + i[2] * m[2][1] + i[3] * m[3][1] + i[4] * m[4][1]
 	v[2] = i[1] * m[1][2] + i[2] * m[2][2] + i[3] * m[3][2] + i[4] * m[4][2]
@@ -431,19 +426,19 @@ local function matrixMultiplyVector(m, i)
 end
 
 -- Set vector i multiplied by matrix m into reference table v
-local function matrixMultiplyVectorR(v, m, i)
+local function mMultiplyVectorR(v, m, i)
     v[1] = i[1] * m[1][1] + i[2] * m[2][1] + i[3] * m[3][1] + i[4] * m[4][1]
 	v[2] = i[1] * m[1][2] + i[2] * m[2][2] + i[3] * m[3][2] + i[4] * m[4][2]
 	v[3] = i[1] * m[1][3] + i[2] * m[2][3] + i[3] * m[3][3] + i[4] * m[4][3]
 	v[4] = i[1] * m[1][4] + i[2] * m[2][4] + i[3] * m[3][4] + i[4] * m[4][4]
 end
 
-local function matrixMakeIdentity()
+local function mMakeIdentity()
     return {{1, 0, 0, 0}, {0, 1, 0, 0,}, {0, 0, 1, 0}, {0, 0, 0, 1}}
 end
 
 -- Get rotation matrix at X angle angleRad
-local function matrixMakeRotationX(angleRad)
+local function mMakeRotationX(angleRad)
     local matrix = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
     matrix[1][1] = 1
 	matrix[2][2] = cos(angleRad * 0.5)
@@ -455,7 +450,7 @@ local function matrixMakeRotationX(angleRad)
 end
 
 -- Get rotation matrix at Y angle angleRad
-local function matrixMakeRotationY(angleRad)
+local function mMakeRotationY(angleRad)
     local matrix = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
     matrix[1][1] = cos(angleRad)
 	matrix[1][3] = sin(angleRad)
@@ -467,7 +462,7 @@ local function matrixMakeRotationY(angleRad)
 end
 
 -- Get rotation matrix at Z angle angleRad
-local function matrixMakeRotationZ(angleRad)
+local function mMakeRotationZ(angleRad)
     local matrix = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
     matrix[1][1] = cos(angleRad)
 	matrix[1][2] = sin(angleRad)
@@ -479,7 +474,7 @@ local function matrixMakeRotationZ(angleRad)
 end
 
 -- Get matrix translated to values x, y, z
-local function matrixMakeTranslation(x, y, z)
+local function mMakeTranslation(x, y, z)
     local matrix = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
     matrix[1][1] = 1
     matrix[2][2] = 1
@@ -492,7 +487,7 @@ local function matrixMakeTranslation(x, y, z)
 end
 
 -- Create projection matrix from input FOV, aspect ratio, near and far distance
-local function matrixMakeProjection(fFovDegrees, fAspectRatio, inFNear, inFFar)
+local function mMakeProjection(fFovDegrees, fAspectRatio, inFNear, inFFar)
     local fFovRad = 1 / tan(fFovDegrees * 0.5 / 180 * 3.14159)
     local matrix = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
     matrix[1][1] = fAspectRatio * fFovRad
@@ -505,7 +500,7 @@ local function matrixMakeProjection(fFovDegrees, fAspectRatio, inFNear, inFFar)
 end
 
 -- Multiply matrix m1 by matrix m2
-local function matrixMultiplyMatrix(m1, m2)
+local function mMultiplyMatrix(m1, m2)
     local matrix = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
     for c = 1, 4 do
         for r = 1, 4 do
@@ -516,15 +511,15 @@ local function matrixMultiplyMatrix(m1, m2)
 end
 
 
-local function matrixPointAt(pos, target, up)
-    local newForward = vectorSub(target, pos)
-    newForward = vectorNormalize(newForward)
+local function mPointAt(pos, target, up)
+    local newForward = vSub(target, pos)
+    newForward = vNormalize(newForward)
 
-    local a = vectorMul(newForward, vectorDotProduct(up, newForward))
-    local newUp = vectorSub(up, a)
-    newUp = vectorNormalize(newUp)
+    local a = vMul(newForward, vDotProduct(up, newForward))
+    local newUp = vSub(up, a)
+    newUp = vNormalize(newUp)
 
-    local newRight = vectorCrossProduct(newUp, newForward)
+    local newRight = vCrossProduct(newUp, newForward)
 
     local matrix = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
     matrix[1][1] = newRight[1];  	matrix[1][2] = newRight[2];	    matrix[1][3] = newRight[3];	    matrix[1][4] = 0
@@ -535,7 +530,7 @@ local function matrixPointAt(pos, target, up)
 end
 
 -- Return inverse of matrix m
-local function matrixQuickInverse(m)
+local function mQuickInverse(m)
     local matrix = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
 	matrix[1][1] = m[1][1]; matrix[1][2] = m[2][1]; matrix[1][3] = m[3][1]; matrix[1][4] = 0
 	matrix[2][1] = m[1][2]; matrix[2][2] = m[2][2]; matrix[2][3] = m[3][2]; matrix[2][4] = 0
@@ -580,16 +575,16 @@ end
 local function createMesh()
 
     -- Precalculate some commonly used variables
-    nLightDir = vectorNormalize(lightDirection)
+    nLightDir = vNormalize(lightDirection)
     screenWidth = gpu.GetScreenWidth(); screenHeight = gpu.GetScreenHeight()
     halfWidth = 0.5 * screenWidth; halfHeight = 0.5 * screenHeight
-    matProj = matrixMakeProjection(fFov, gpu.GetAspectRatio(), fNear, fFar)
+    matProj = mMakeProjection(fFov, gpu.GetAspectRatio(), fNear, fFar)
 
-    vsLeftDP = vectorDotProduct({1, 0, 0}, {1, 0, 0})
-    vsRightDP = vectorDotProduct({screenWidth + 1, 0, 0}, {-1, 0, 0})
-    vsTopDP = vectorDotProduct({0, 0, 0}, {0, 1, 0})
-    vsBottomDP = vectorDotProduct({0, screenHeight, 0}, {0, -1, 0})
-    nearDP = vectorDotProduct(nearPlane, nearNormal)
+    vsLeftDP = vDotProduct({1, 0, 0}, {1, 0, 0})
+    vsRightDP = vDotProduct({screenWidth + 1, 0, 0}, {-1, 0, 0})
+    vsTopDP = vDotProduct({0, 0, 0}, {0, 1, 0})
+    vsBottomDP = vDotProduct({0, screenHeight, 0}, {0, -1, 0})
+    nearDP = vDotProduct(nearPlane, nearNormal)
 
     -- Load model, or default to the cube
     -- Verts, Projected Verts, Viewspace Verts, Tris, Textures, Lazy BF Count Tricount, Vertcount
@@ -643,7 +638,7 @@ end
 -- Get color from xyz value of face normal
 local function getColorFromNormal(normal)
     -- Offset it for prettier colors
-    local fixed = vectorAdd(vectorMul(normal, 0.5), {0.5, 0.5, 0.5})
+    local fixed = vAdd(vMul(normal, 0.5), {0.5, 0.5, 0.5})
 
     -- Inflate channel values back to 1-255, rounding to nearest available color index
     fixed[1] = (fixed[1] // 0.17) * 51
@@ -970,9 +965,8 @@ local function viewportClipTriangle(trisToRaster)
     rasterizeCumulative = rasterizeCumulative + (GetCPUTime() - rasterizeStart)
 end
 
-local projectionStart; local projectionCumulative = 0
+local projectionStart; local projCumulative = 0
 local segmentTimeStart; local segmentCumulative = 0
-local lazyCulledCount = 0
 local pClipped, nPClipped = {}, 0
 local normal, line1, line2 = {0, 0, 0}, {0, 0, 0}, {0, 0, 0}
 
@@ -982,34 +976,34 @@ local function rasterizeMesh()
 
     -- Rotate mesh if rotation enabled
     if doModelRotate then fTheta = fTheta + elapsedTime end
-	matRotZ = matrixMakeRotationZ(doModelRotateZ and fTheta * 0.5 or 0)
-	matRotX = matrixMakeRotationX(doModelRotateX and fTheta or 0)
-    matRotY = matrixMakeRotationY(doModelRotateY and fTheta * 0.25 or 0)
+	matRotZ = mMakeRotationZ(doModelRotateZ and fTheta * 0.5 or 0)
+	matRotX = mMakeRotationX(doModelRotateX and fTheta or 0)
+    matRotY = mMakeRotationY(doModelRotateY and fTheta * 0.25 or 0)
 
     -- Amount to translate model in scene
     -- TODO: This should probably be packed into the loadedMesh table
-    local matTrans = matrixMakeTranslation(0, 0, 7.5)
+    local matTrans = mMakeTranslation(0, 0, 7.5)
 
     -- Build mesh rotation matrix, handles if mesh is rotating
-    local matWorld = matrixMakeIdentity()
-    matWorld = matrixMultiplyMatrix(matRotZ, matRotX)
-    matWorld = matrixMultiplyMatrix(matWorld, matRotY)
-    matWorld = matrixMultiplyMatrix(matWorld, matTrans)
+    local matWorld = mMakeIdentity()
+    matWorld = mMultiplyMatrix(matRotZ, matRotX)
+    matWorld = mMultiplyMatrix(matWorld, matRotY)
+    matWorld = mMultiplyMatrix(matWorld, matTrans)
 
     -- Get camera rotation matrix from player control
     local vUp, vTarget = {0, 1, 0, 1}, {0, 0, 1, 1}
-    local matCameraPitch = matrixMakeRotationX(fPitch)
-    local matCameraYaw = matrixMakeRotationY(fYaw)
-    local matCameraRot = matrixMultiplyMatrix(matCameraPitch, matCameraYaw)
-    vLookDir = matrixMultiplyVector(matCameraRot, vTarget)
-    vTarget = vectorAdd(vCamera, vLookDir)
-    local matCamera = matrixPointAt(vCamera, vTarget, vUp) -- vCamera, vTarget, vUp
-    local matView = matrixQuickInverse(matCamera)
+    local matCameraPitch = mMakeRotationX(fPitch)
+    local matCameraYaw = mMakeRotationY(fYaw)
+    local matCameraRot = mMultiplyMatrix(matCameraPitch, matCameraYaw)
+    vLookDir = mMultiplyVector(matCameraRot, vTarget)
+    vTarget = vAdd(vCamera, vLookDir)
+    local matCamera = mPointAt(vCamera, vTarget, vUp) -- vCamera, vTarget, vUp
+    local matView = mQuickInverse(matCamera)
 
     -- First, project vertices
     for i = 1, loadedMesh.vertCount do
-        matrixMultiplyVectorR(loadedMesh.pVert[i], matWorld, table.pack(string.unpack(vertPackS, loadedMesh.vert[i])))
-        matrixMultiplyVectorR(loadedMesh.vsVert[i], matView, loadedMesh.pVert[i])
+        mMultiplyVectorR(loadedMesh.pVert[i], matWorld, table.pack(string.unpack(vertPackS, loadedMesh.vert[i])))
+        mMultiplyVectorR(loadedMesh.vsVert[i], matView, loadedMesh.pVert[i])
     end
 
     -- Then use projected vertices to construct and 
@@ -1017,21 +1011,21 @@ local function rasterizeMesh()
         projectionStart = GetCPUTime()
 
         -- Get face normal
-        line1 = vectorSub(loadedMesh.pVert[loadedMesh.vInd[i][2]], loadedMesh.pVert[loadedMesh.vInd[i][1]])
-        line2 = vectorSub(loadedMesh.pVert[loadedMesh.vInd[i][3]], loadedMesh.pVert[loadedMesh.vInd[i][1]])
-        normal = vectorCrossProduct(line1, line2)
-        normal = vectorNormalize(normal)
+        line1 = vSub(loadedMesh.pVert[loadedMesh.vInd[i][2]], loadedMesh.pVert[loadedMesh.vInd[i][1]])
+        line2 = vSub(loadedMesh.pVert[loadedMesh.vInd[i][3]], loadedMesh.pVert[loadedMesh.vInd[i][1]])
+        normal = vCrossProduct(line1, line2)
+        normal = vNormalize(normal)
 
         -- Compare face normal against camera normal for backface culling
-        local vCameraRay = vectorSub(loadedMesh.pVert[loadedMesh.vInd[i][1]], vCamera)
-        local normalToCamera = vectorDotProduct(normal, vCameraRay)
+        local vCameraRay = vSub(loadedMesh.pVert[loadedMesh.vInd[i][1]], vCamera)
+        local normalToCamera = vDotProduct(normal, vCameraRay)
 
-        projectionCumulative = projectionCumulative + (GetCPUTime() - projectionStart)
+        projCumulative = projCumulative + (GetCPUTime() - projectionStart)
         if normalToCamera < bfcThreshold then
             projectionStart = GetCPUTime()
 
             -- Get amount of shade relative to light normal, and find normal color if needed
-            local lightDp = max(min(lightBias + vectorDotProduct(nLightDir, normal), 1), shadeMaximum)
+            local lightDp = max(min(lightBias + vDotProduct(nLightDir, normal), 1), shadeMaximum)
             local tColor = 0x000000
             if doNormalFlatColoring then tColor = getColorFromNormal(normal) end
 
@@ -1045,14 +1039,14 @@ local function rasterizeMesh()
                  table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.uInd[i][3]]))}
             })
 
-            projectionCumulative = projectionCumulative + (GetCPUTime() - projectionStart) -- Timing point end
+            projCumulative = projCumulative + (GetCPUTime() - projectionStart) -- Timing point end
             for n = 1, nPClipped do
                 projectionStart = GetCPUTime()
 
                 -- Project points and uvs from 3D to 2D
-                pClipped[n][1][1] = matrixMultiplyVector(matProj, pClipped[n][1][1])
-                pClipped[n][1][2] = matrixMultiplyVector(matProj, pClipped[n][1][2])
-                pClipped[n][1][3] = matrixMultiplyVector(matProj, pClipped[n][1][3])
+                pClipped[n][1][1] = mMultiplyVector(matProj, pClipped[n][1][1])
+                pClipped[n][1][2] = mMultiplyVector(matProj, pClipped[n][1][2])
+                pClipped[n][1][3] = mMultiplyVector(matProj, pClipped[n][1][3])
                 pClipped[n][2][1][1] = pClipped[n][2][1][1] / pClipped[n][1][1][4]
                 pClipped[n][2][2][1] = pClipped[n][2][2][1] / pClipped[n][1][2][4]
                 pClipped[n][2][3][1] = pClipped[n][2][3][1] / pClipped[n][1][3][4]
@@ -1064,9 +1058,9 @@ local function rasterizeMesh()
                 pClipped[n][2][3][3] = 1 / pClipped[n][1][3][4]
 
                 -- Scale into view
-                pClipped[n][1][1] = vectorDiv(pClipped[n][1][1], pClipped[n][1][1][4])
-                pClipped[n][1][2] = vectorDiv(pClipped[n][1][2], pClipped[n][1][2][4])
-                pClipped[n][1][3] = vectorDiv(pClipped[n][1][3], pClipped[n][1][3][4])
+                pClipped[n][1][1] = vDiv(pClipped[n][1][1], pClipped[n][1][1][4])
+                pClipped[n][1][2] = vDiv(pClipped[n][1][2], pClipped[n][1][2][4])
+                pClipped[n][1][3] = vDiv(pClipped[n][1][3], pClipped[n][1][3][4])
 
                 -- Invert XY
                 pClipped[n][1][1][1] = -pClipped[n][1][1][1]
@@ -1077,9 +1071,9 @@ local function rasterizeMesh()
 				pClipped[n][1][3][2] = -pClipped[n][1][3][2]
 
                 -- Offset verts into visible normalized space
-                pClipped[n][1][1] = vectorAdd(pClipped[n][1][1], vsOffset)
-                pClipped[n][1][2] = vectorAdd(pClipped[n][1][2], vsOffset)
-                pClipped[n][1][3] = vectorAdd(pClipped[n][1][3], vsOffset)
+                pClipped[n][1][1] = vAdd(pClipped[n][1][1], vsOffset)
+                pClipped[n][1][2] = vAdd(pClipped[n][1][2], vsOffset)
+                pClipped[n][1][3] = vAdd(pClipped[n][1][3], vsOffset)
                 pClipped[n][1][1][1] = pClipped[n][1][1][1] * halfWidth
                 pClipped[n][1][2][1] = pClipped[n][1][2][1] * halfWidth
                 pClipped[n][1][3][1] = pClipped[n][1][3][1] * halfWidth
@@ -1093,7 +1087,7 @@ local function rasterizeMesh()
                 pClipped[n][5] = lightDp
 
                 -- Send triangle to be viewport clipped and then rendered
-                projectionCumulative = projectionCumulative + (GetCPUTime() - projectionStart)
+                projCumulative = projCumulative + (GetCPUTime() - projectionStart)
                 viewportClipTriangle({pClipped[n]})
                 pClipped[n] = nil
             end
@@ -1111,7 +1105,7 @@ local debugFG, debugBG = 0xFFFFFF, 0x000000
 
 -- Print debug stats to the screen
 local function modelDebug()
-    projectionTimeTotal = projectionTimeTotal + projectionCumulative
+    projectionTimeTotal = projectionTimeTotal + projCumulative
     rasterizeTimeTotal = rasterizeTimeTotal + rasterizeCumulative
     segmentTimeTotal = segmentTimeTotal + segmentCumulative
     local projAverage = projectionTimeTotal / debugCycles
@@ -1123,13 +1117,11 @@ local function modelDebug()
     SetText(1, 5, string.format("DRAWN: %d", trisDrawnLast), debugFG, debugBG, false)
     SetText(1, 7, string.format("Proj: %0.1fms", (projAverage) * 1000), debugFG, debugBG, false)
     SetText(1, 9, string.format("Rast: %0.1fms", (rastAverage) * 1000), debugFG, debugBG, false)
-    SetText(1, 11, string.format("LBFC: %d", lazyCulledCount), debugFG, debugBG, false)
-    SetText(1, 13, string.format("SEG: %1.1fms", (segAverage) * 1000), debugFG, debugBG, false)
+    SetText(1, 11, string.format("SEG: %1.1fms", (segAverage) * 1000), debugFG, debugBG, false)
 
     segmentCumulative = 0
-    projectionCumulative = 0
+    projCumulative = 0
     rasterizeCumulative = 0
-    lazyCulledCount = 0
     debugCycles = debugCycles + 1
     if debugCycles > maxDebugCycles then
         projectionTimeTotal = projAverage
@@ -1161,20 +1153,20 @@ local function applyInputControls()
     end
     if inputManager.isKeyDown(inputManager, KEY_LEFT) then
         -- right: x = -z and z = x
-        local vRight = vectorMul({-vLookDir[3], 0, vLookDir[1]}, moveSpeed * elapsedTime)
-        vCamera = vectorSub(vCamera, vRight)
+        local vRight = vMul({-vLookDir[3], 0, vLookDir[1]}, moveSpeed * elapsedTime)
+        vCamera = vSub(vCamera, vRight)
     end
     if inputManager.isKeyDown(inputManager, KEY_RIGHT) then
-        local vRight = vectorMul({-vLookDir[3], 0, vLookDir[1]}, moveSpeed * elapsedTime)
-        vCamera = vectorAdd(vCamera, vRight)
+        local vRight = vMul({-vLookDir[3], 0, vLookDir[1]}, moveSpeed * elapsedTime)
+        vCamera = vAdd(vCamera, vRight)
     end
     if inputManager.isKeyDown(inputManager, KEY_FORWARD) then
-        local vForward = vectorMul(vLookDir, moveSpeed * elapsedTime)
-        vCamera = vectorAdd(vCamera, vForward)
+        local vForward = vMul(vLookDir, moveSpeed * elapsedTime)
+        vCamera = vAdd(vCamera, vForward)
     end
     if inputManager.isKeyDown(inputManager, KEY_BACKWARD) then
-        local vForward = vectorMul(vLookDir, moveSpeed * elapsedTime)
-        vCamera = vectorSub(vCamera, vForward)
+        local vForward = vMul(vLookDir, moveSpeed * elapsedTime)
+        vCamera = vSub(vCamera, vForward)
     end
     if inputManager.isKeyDown(inputManager, KEY_TURNLEFT) then
         fYaw = fYaw - (2 * elapsedTime)

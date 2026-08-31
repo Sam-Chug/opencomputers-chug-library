@@ -118,8 +118,8 @@ end
 local function setForeground(color)
     if currentForeground ~= color then
         GPUSetFG(color)
-        gpuUsageStats.fore = gpuUsageStats.fore + 1;
         currentForeground = color
+        gpuUsageStats.fore = gpuUsageStats.fore + 1
     end
 end
 
@@ -127,8 +127,8 @@ end
 local function setBackground(color)
     if currentBackground ~= color then
         GPUSetBG(color)
-        gpuUsageStats.back = gpuUsageStats.back + 1;
         currentBackground = color
+        gpuUsageStats.back = gpuUsageStats.back + 1
     end
 end
 
@@ -833,10 +833,35 @@ local function drawDemoGraphics(x, y, width, height)
     ClearScreen()
 
     -- Run a gpu function n times
+
     if debugDoBenchmark then
-        for i = 1, 2800 do
-            gpu.get((i % 50) + 1, (i % 50) + 1)
+
+        -- ~20fps at 1300 set + foreground swap
+        -- for i = 1, 1300 do
+        --     gpu.setForeground(hexLUT[random(1, 255)])
+        --     gpu.set((i % 100) + 1 + (i // 100), (i % 100) // 2, ".", false)
+        -- end
+
+        -- 20fps
+        for i = 1, 800 do
+            gpu.setBackground(hexLUT[random(1, 255)])
+            gpu.setForeground(hexLUT[random(1, 255)])
+            gpu.set((i % 100) + 1 + (i // 100), (i % 100) // 2, ".", false)
         end
+        GPUBitBlt(0, 1, 1, screenWidth, screenHeight, buffer, 1, 1)
+
+        -- ~20fps at 2200 sets
+        -- gpu.setForeground(hexLUT[random(1, 255)])
+        -- for i = 1, 2200 do
+        --     local x = random(1, screenWidth)
+        --     local y = random(1, screenHeight)
+        --     gpu.set(x, y, ".", false)
+        -- end
+
+        drawDebug()
+        DrawFrame()
+        takeDebugMeasurements()
+        GPUBitBlt(0, 1, 1, screenWidth, screenHeight, buffer, 1, 1)
     end
 
     -- Draw 350 random white lines

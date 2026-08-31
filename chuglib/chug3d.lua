@@ -147,7 +147,7 @@ local uvPackS = "ffB"
 
 -- For default cube mesh, this is probably stupid but I can't think of a clean way to merge this below
 local function getMeshFromText(text)
-    local tris, verts, uvs = {}, {}, {}
+    local verts, uvs, vInd, uInd = {}, {}, {}, {}
     for i = 1, #text do
         local line = text[i]
         local data = {}
@@ -180,22 +180,20 @@ local function getMeshFromText(text)
                     end
                 end
                 -- Create triangle, get its vertex indices and uv coordiantes
-                local newTri = MemTriangle()
-                newTri[1] = {pointData[1], pointData[3], pointData[5]}
-                newTri[2] = {pointData[2], pointData[4], pointData[6]}
-                TInsert(tris, newTri)
+                TInsert(vInd, {pointData[1], pointData[3], pointData[5]})
+                TInsert(uInd, {pointData[2], pointData[4], pointData[6]})
             end
         end
         data = nil
         line = nil
         ::continue::
     end
-    return tris, verts, uvs
+    return verts, uvs, vInd, uInd
 end
 
 -- Load .obj from file at filenam, parse vertex/face data and build a list of triangles from it 
 local function getMeshFromFile(filename)
-    local tris, verts, uvs = {}, {}, {}
+    local verts, uvs, vInd, uInd = {}, {}, {}, {}
     local hasUvs = false
     for line in io.lines(filename) do
         local data = {}
@@ -234,10 +232,8 @@ local function getMeshFromFile(filename)
                     end
                 end
 
-                local newTri = MemTriangle()
-                newTri[1] = {pointData[1], pointData[3], pointData[5]}
-                newTri[2] = {pointData[2], pointData[4], pointData[6]}
-                TInsert(tris, newTri)
+                TInsert(vInd, {pointData[1], pointData[3], pointData[5]})
+                TInsert(uInd, {pointData[2], pointData[4], pointData[6]})
 
             elseif parts == 2 then
                 -- Vertex/UV/Vertex-Normal
@@ -249,17 +245,13 @@ local function getMeshFromFile(filename)
                     end
                 end
 
-                local newTri = MemTriangle()
-                newTri[1] = {pointData[1], pointData[4], pointData[7]}
-                newTri[2] = {pointData[2], pointData[5], pointData[8]}
-                TInsert(tris, newTri)
+                TInsert(vInd, {pointData[1], pointData[4], pointData[7]})
+                TInsert(uInd, {pointData[2], pointData[5], pointData[8]})
 
             -- Otherwise, just grab the verts
             else
-                local newTri = MemTriangle()
-                newTri[1] = {tonumber(data[2]), tonumber(data[3]), tonumber(data[4])}
-                newTri[2] = {1, 2, 3}
-                TInsert(tris, newTri)
+                TInsert(vInd, {tonumber(data[2]), tonumber(data[3]), tonumber(data[4])})
+                TInsert(uInd, {1, 2, 3})
             end
         end
         data, line = nil, nil
@@ -269,7 +261,7 @@ local function getMeshFromFile(filename)
     if not hasUvs then
         uvs = {string.pack(uvPackS, 0, 0, 1), string.pack(uvPackS, 0, 1, 1), string.pack(uvPackS, 1, 1, 1)}
     end
-    return tris, verts, uvs
+    return verts, uvs, vInd, uInd
 end
 
 -- ============================================================
@@ -605,25 +597,24 @@ local function createMesh()
 
     -- Load model, or default to the cube
     -- Verts, Projected Verts, Viewspace Verts, Tris, Textures, Lazy BF Count Tricount, Vertcount
-    loadedMesh = {vert = {}, pVert = {}, vsVert = {}, uvs = {}, tris = {}, 0, lbfc = {}, triCount = 0, vertCount = 0}
+    loadedMesh = {
+        vert = {}, pVert = {}, vsVert = {}, -- Raw vertices, and two arrays for storing projected and viewspace vertices
+        uvs = {},                           -- Raw texture coordinates
+        vInd = {}, uInd = {},               -- For each triangle, its vertex and uv lookup indices
+        lbfc = {},                          -- Lazy back face culling index
+        triCount = 0, vertCount = 0
+    }
 
-    -- Get default-cube if that's what we really want
-    if modelFile == "default-cube" then
-        loadedMesh.tris, loadedMesh.vert, loadedMesh.uvs = getMeshFromText(defaultCubeOBJ)
-
-    -- Otherwise, get model from specified model file, if it exists
+    -- TODO: Look for texture with the same name as the loaded mesh and load it as well
+    if fileExists(modelFile) then
+        loadedMesh.vert, loadedMesh.uvs, loadedMesh.vInd, loadedMesh.uInd = getMeshFromFile(modelFile)
     else
-        -- TODO: Look for texture with the same name as the loaded mesh and load it as well
-        if fileExists(modelFile) then
-            loadedMesh.tris, loadedMesh.vert, loadedMesh.uvs = getMeshFromFile(modelFile)
-        else
-            modelFile = "default-cube-fallback"
-            loadedMesh.tris, loadedMesh.vert, loadedMesh.uvs = getMeshFromText(defaultCubeOBJ)
-        end
+        modelFile = "default-cube-fallback"
+        loadedMesh.vert, loadedMesh.uvs, loadedMesh.vInd, loadedMesh.uInd = getMeshFromText(defaultCubeOBJ)
     end
 
     -- Get tricount
-    loadedMesh.triCount = #loadedMesh.tris
+    loadedMesh.triCount = #loadedMesh.vInd
     loadedMesh.vertCount = #loadedMesh.vert
 
     -- We now have a list of verts and a list of tris with indeces pointing towards their 3 vertices
@@ -1062,13 +1053,13 @@ local function rasterizeMesh()
         end
 
         -- Get face normal
-        line1 = vectorSub(loadedMesh.pVert[loadedMesh.tris[i][1][2]], loadedMesh.pVert[loadedMesh.tris[i][1][1]])
-        line2 = vectorSub(loadedMesh.pVert[loadedMesh.tris[i][1][3]], loadedMesh.pVert[loadedMesh.tris[i][1][1]])
+        line1 = vectorSub(loadedMesh.pVert[loadedMesh.vInd[i][2]], loadedMesh.pVert[loadedMesh.vInd[i][1]])
+        line2 = vectorSub(loadedMesh.pVert[loadedMesh.vInd[i][3]], loadedMesh.pVert[loadedMesh.vInd[i][1]])
         normal = vectorCrossProduct(line1, line2)
         normal = vectorNormalize(normal)
 
         -- Compare face normal against camera normal for backface culling
-        local vCameraRay = vectorSub(loadedMesh.pVert[loadedMesh.tris[i][1][1]], vCamera)
+        local vCameraRay = vectorSub(loadedMesh.pVert[loadedMesh.vInd[i][1]], vCamera)
         local normalToCamera = vectorDotProduct(normal, vCameraRay)
 
         projectionCumulative = projectionCumulative + (GetCPUTime() - projectionStart)
@@ -1077,17 +1068,18 @@ local function rasterizeMesh()
 
             -- Get amount of shade relative to light normal, and find normal color if needed
             local lightDp = max(min(lightBias + vectorDotProduct(nLightDir, normal), 1), shadeMaximum)
-            if doNormalFlatColoring then loadedMesh.tris[i][4] = getColorFromNormal(normal) end
+            local tColor = 0x000000
+            if doNormalFlatColoring then tColor = getColorFromNormal(normal) end
 
             -- Clip triangles against near plane
             -- TODO: Is there a quick check we can perform to skip this step for tris beyond the near plane?
             nPClipped, pClipped[1], pClipped[2] = triClipPlane(nearDP, nearNormal, {
-                {loadedMesh.vsVert[loadedMesh.tris[i][1][1]],
-                 loadedMesh.vsVert[loadedMesh.tris[i][1][2]],
-                 loadedMesh.vsVert[loadedMesh.tris[i][1][3]]},
-                {table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.tris[i][2][1]])),
-                 table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.tris[i][2][2]])),
-                 table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.tris[i][2][3]]))}
+                {loadedMesh.vsVert[loadedMesh.vInd[i][1]],
+                 loadedMesh.vsVert[loadedMesh.vInd[i][2]],
+                 loadedMesh.vsVert[loadedMesh.vInd[i][3]]},
+                {table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.uInd[i][1]])),
+                 table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.uInd[i][2]])),
+                 table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.uInd[i][3]]))}
             })
 
             projectionCumulative = projectionCumulative + (GetCPUTime() - projectionStart) -- Timing point end
@@ -1133,8 +1125,8 @@ local function rasterizeMesh()
                 pClipped[n][1][3][2] = pClipped[n][1][3][2] * halfHeight
 
                 -- Copy texture over
-                pClipped[n][3] = loadedMesh.tris[i][3]
-                pClipped[n][4] = loadedMesh.tris[i][4]
+                pClipped[n][3] = 1 -- TODO: TEMP, store texture indices in loadedMesh
+                pClipped[n][4] = tColor
                 pClipped[n][5] = lightDp
 
                 -- Send triangle to be viewport clipped and then rendered

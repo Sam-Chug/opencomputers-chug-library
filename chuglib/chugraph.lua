@@ -300,9 +300,9 @@ local function NewDrawFrame()
                 if xSkipIndex + x > funcWidth then break end
             end
 
-            GPUSetFG(fillGroup[3]); currentForeground = fillGroup[3]
-            GPUSetBG(fillGroup[4]); currentBackground = fillGroup[4]
-            GPUSet(fillGroup[1], fillGroup[2], Concat(charString))
+            gpu.setForeground(fillGroup[3]); currentForeground = fillGroup[3]
+            gpu.setBackground(fillGroup[4]); currentBackground = fillGroup[4]
+            gpu.set(fillGroup[1], fillGroup[2], Concat(charString))
             -- set(fillGroup[1], fillGroup[2], fillGroup[3], fillGroup[4], Concat(charString))
 
             fillGroup = nil
@@ -856,14 +856,14 @@ local debugForeColor = 0xFFFFFF; local debugBackColor = 0x330040
 
 local function getGPUUsage()
     -- Values were determined using a loop, increasing values until fps was sub-20
-    -- Set = 3000 | SetFG = 2600 | SetBG = 2600 | Fill = 2000 | Get = 2800
+    -- Set = 2200 | SetFG = 2000 | SetBG = 2000 | Fill = 1400 | Get = 2000
     -- These values do not take into account the weight of BitBlt, whose impact I do not understand as of yet
     -- This is largely speculative and likely very wrong but they do give a decent approximation of the GPU call allowance
-    return gpuUsageStats.lastSet  / 3000 +
-           gpuUsageStats.lastFill / 2000 +
-           gpuUsageStats.lastFore / 2600 +
-           gpuUsageStats.lastBack / 2600 +
-           gpuUsageStats.lastGet  / 2800
+    return gpuUsageStats.lastSet  / 2200 +
+           gpuUsageStats.lastFill / 1400 +
+           gpuUsageStats.lastFore / 2000 +
+           gpuUsageStats.lastBack / 2000 +
+           gpuUsageStats.lastGet  / 2000
 end
 
 -- Write debug stats to graphcis buffer

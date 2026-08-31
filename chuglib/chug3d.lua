@@ -334,6 +334,7 @@ end
 
 local insidePi = {0, 0, 0}; local outsidePi = {0, 0, 0}
 local insideTi = {0, 0, 0}; local outsideTi = {0, 0, 0}
+local nInsideP = 0; local nOutsideP = 0
 
 -- Test if triangle clips plane, return clipped triangles if so
 local function triClipPlane(planeDP, planeN, inTri)
@@ -344,7 +345,7 @@ local function triClipPlane(planeDP, planeN, inTri)
 
     -- Calculate if point lies inside or outside of the clipping plane
     -- Save index of vertex in inTri instead of the entire vertex
-    local nInsideP = 0; local nOutsideP = 0
+    nInsideP, nOutsideP = 0, 0
     for i = 1, 3 do
         if dist(inTri[1][i]) >= 0 then
             nInsideP = nInsideP + 1
@@ -440,6 +441,14 @@ local function matrixMultiplyVector(m, i)
 	v[3] = i[1] * m[1][3] + i[2] * m[2][3] + i[3] * m[3][3] + i[4] * m[4][3]
 	v[4] = i[1] * m[1][4] + i[2] * m[2][4] + i[3] * m[3][4] + i[4] * m[4][4]
     return v
+end
+
+-- Set vector i multiplied by matrix m into reference table v
+local function matrixMultiplyVectorR(v, m, i)
+    v[1] = i[1] * m[1][1] + i[2] * m[2][1] + i[3] * m[3][1] + i[4] * m[4][1]
+	v[2] = i[1] * m[1][2] + i[2] * m[2][2] + i[3] * m[3][2] + i[4] * m[4][2]
+	v[3] = i[1] * m[1][3] + i[2] * m[2][3] + i[3] * m[3][3] + i[4] * m[4][3]
+	v[4] = i[1] * m[1][4] + i[2] * m[2][4] + i[3] * m[3][4] + i[4] * m[4][4]
 end
 
 local function matrixMakeIdentity()
@@ -893,19 +902,16 @@ local clipTrisToRaster, testTri, vClipped = {}, {}, {}
 
 -- Clip each triangle against each side of the viewport
 -- After clipping, rasterize each triangle
-local function viewportClipTriangle(triToRaster)
+local function viewportClipTriangle(trisToRaster)
 
     -- Check if any points are outside of screenspace
-    -- TODO: I hate creating this array if we dont need it (clipTrisToRaster)
-    -- How can this cleanly be skipped and just draw the single triToRaster sent into the function
     local nNewTriangles = 1
-    clipTrisToRaster = {{triToRaster[1], triToRaster[2], triToRaster[3], triToRaster[4], triToRaster[5]}}
-    if triToRaster[1][1][1] < 1 or triToRaster[1][1][1] > screenWidth then goto clipTri end
-    if triToRaster[1][1][2] < 1 or triToRaster[1][1][2] > screenHeight then goto clipTri end
-    if triToRaster[1][2][1] < 1 or triToRaster[1][2][1] > screenWidth then goto clipTri end
-    if triToRaster[1][2][2] < 1 or triToRaster[1][2][2] > screenHeight then goto clipTri end
-    if triToRaster[1][3][1] < 1 or triToRaster[1][3][1] > screenWidth then goto clipTri end
-    if triToRaster[1][3][2] < 1 or triToRaster[1][3][2] > screenHeight then goto clipTri end
+    if trisToRaster[1][1][1][1] < 1 or trisToRaster[1][1][1][1] > screenWidth then goto clipTri end
+    if trisToRaster[1][1][1][2] < 1 or trisToRaster[1][1][1][2] > screenHeight then goto clipTri end
+    if trisToRaster[1][1][2][1] < 1 or trisToRaster[1][1][2][1] > screenWidth then goto clipTri end
+    if trisToRaster[1][1][2][2] < 1 or trisToRaster[1][1][2][2] > screenHeight then goto clipTri end
+    if trisToRaster[1][1][3][1] < 1 or trisToRaster[1][1][3][1] > screenWidth then goto clipTri end
+    if trisToRaster[1][1][3][2] < 1 or trisToRaster[1][1][3][2] > screenHeight then goto clipTri end
     goto skipClip
 
     -- If points exist outside of screenspace, clip triangles against sides of viewport
@@ -916,8 +922,8 @@ local function viewportClipTriangle(triToRaster)
         while nNewTriangles > 0 do
 
             testTri = {
-                clipTrisToRaster[1][1],
-                clipTrisToRaster[1][2]
+                trisToRaster[1][1],
+                trisToRaster[1][2]
             }
             nNewTriangles = nNewTriangles - 1
 
@@ -961,18 +967,18 @@ local function viewportClipTriangle(triToRaster)
             -- TODO: Do this more elegantly
             -- If no clipping occurred, just add triangle
             if nTrisToAdd == -1 then
-                TInsert(clipTrisToRaster, {vClipped[1][1], vClipped[1][2], triToRaster[3], triToRaster[4], triToRaster[5]})
+                TInsert(trisToRaster, {vClipped[1][1], vClipped[1][2], trisToRaster[1][3], trisToRaster[1][4], trisToRaster[1][5]})
             -- If clipping occurred, add all new triangles
             else
                 for w = 1, nTrisToAdd do
-                    TInsert(clipTrisToRaster, {vClipped[w][1], vClipped[w][2], triToRaster[3], triToRaster[4], triToRaster[5]})
+                    TInsert(trisToRaster, {vClipped[w][1], vClipped[w][2], trisToRaster[1][3], trisToRaster[1][4], trisToRaster[1][5]})
                 end
             end
 
-            TRemove(clipTrisToRaster, 1)
+            TRemove(trisToRaster, 1)
             vClipped = nil
         end
-        nNewTriangles = #clipTrisToRaster
+        nNewTriangles = #trisToRaster
     end
     ::skipClip::
 
@@ -982,25 +988,24 @@ local function viewportClipTriangle(triToRaster)
 
         -- Draw with texture
         if doDrawTextured then
-            texturedTriangle(clipTrisToRaster[i][1], clipTrisToRaster[i][2], clipTrisToRaster[i])
+            texturedTriangle(trisToRaster[i][1], trisToRaster[i][2], trisToRaster[i])
 
         -- Draw shaded
         -- TODO: Move to textured triangle
         elseif doDrawFlatShaded then
-            FillTriangle(clipTrisToRaster[i][1], GetGreyscaleColor(clipTrisToRaster[i].l))
+            FillTriangle(trisToRaster[i][1], GetGreyscaleColor(trisToRaster[i].l))
         end
 
         -- Draw wireframe
         -- TODO: Should not fill triangle if this is enabled (or have an option for it)
         if doDrawWireframe then
-            DrawTriangle(clipTrisToRaster[i][1], 0xFFFFFF)
+            DrawTriangle(trisToRaster[i][1], 0xFFFFFF)
         end
 
         -- Debug
         trisDrawnLast = trisDrawnLast + 1
     end
-    triToRaster = nil
-    clipTrisToRaster = nil
+    trisToRaster = nil
     rasterizeCumulative = rasterizeCumulative + (GetCPUTime() - rasterizeStart)
 end
 
@@ -1008,6 +1013,7 @@ local projectionStart; local projectionCumulative = 0
 local segmentTimeStart; local segmentCumulative = 0
 local lazyCulledCount = 0
 local pClipped, nPClipped = {}, 0
+local normal, line1, line2 = {0, 0, 0}, {0, 0, 0}, {0, 0, 0}
 
 -- Project verts, and then triangles from loaded mesh data
 -- Each triangle gets sent into the rasterizer
@@ -1030,8 +1036,7 @@ local function rasterizeMesh()
     matWorld = matrixMultiplyMatrix(matWorld, matTrans)
 
     -- Get camera rotation matrix from player control
-    local vUp = {0, 1, 0, 1}
-    local vTarget = {0, 0, 1, 1}
+    local vUp, vTarget = {0, 1, 0, 1}, {0, 0, 1, 1}
     local matCameraPitch = matrixMakeRotationX(fPitch)
     local matCameraYaw = matrixMakeRotationY(fYaw)
     local matCameraRot = matrixMultiplyMatrix(matCameraPitch, matCameraYaw)
@@ -1043,8 +1048,8 @@ local function rasterizeMesh()
     -- First, project vertices
     for i = 1, loadedMesh.vertCount do
         local unpackedV = table.pack(string.unpack(vertPackS, loadedMesh.vert[i]))
-        loadedMesh.pVert[i] = matrixMultiplyVector(matWorld, unpackedV)
-        loadedMesh.vsVert[i] = matrixMultiplyVector(matView, loadedMesh.pVert[i])
+        matrixMultiplyVectorR(loadedMesh.pVert[i], matWorld, unpackedV)
+        matrixMultiplyVectorR(loadedMesh.vsVert[i], matView, loadedMesh.pVert[i])
     end
 
     -- Then use projected vertices to construct and 
@@ -1059,7 +1064,6 @@ local function rasterizeMesh()
         end
 
         -- Get face normal
-        local normal, line1, line2 = {0, 0, 0}, {0, 0, 0}, {0, 0, 0}
         line1 = vectorSub(loadedMesh.pVert[loadedMesh.tris[i][1][2]], loadedMesh.pVert[loadedMesh.tris[i][1][1]])
         line2 = vectorSub(loadedMesh.pVert[loadedMesh.tris[i][1][3]], loadedMesh.pVert[loadedMesh.tris[i][1][1]])
         normal = vectorCrossProduct(line1, line2)
@@ -1137,7 +1141,7 @@ local function rasterizeMesh()
 
                 -- Send triangle to be viewport clipped and then rendered
                 projectionCumulative = projectionCumulative + (GetCPUTime() - projectionStart)
-                viewportClipTriangle(pClipped[n])
+                viewportClipTriangle({pClipped[n]})
                 pClipped[n] = nil
             end
         elseif normalToCamera > bfcLazyThreshold then

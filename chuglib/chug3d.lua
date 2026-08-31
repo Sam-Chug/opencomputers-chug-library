@@ -63,6 +63,7 @@ local function setArguments()
     if ops.d then doDepthBufferColoring = true end
     if ops.s then doShadedColoring = true end
     if ops.b then doDepthBlending = true end
+    if ops.f then doDrawFlatShaded = true end
     if ops.r then
         doModelRotate = true
         if ops.x then doModelRotateX = true
@@ -709,6 +710,9 @@ local function drawTexturedTriangle(x, y, tri, texU, texV, texW)
         SetPixel(x, y, tri[4])
 
     -- Shade texture based on angle to specified light source
+    elseif doDrawFlatShaded then
+        SetPixel(x, y, GetGreyscaleColor(tri[5]))
+
     elseif doShadedColoring then
         local sampleColor = uvSampleTexture(texU / texW, texV / texW, tri[3])
         SetPixel(x, y, GetShadedColor(sampleColor, tri[5]))
@@ -986,20 +990,13 @@ local function viewportClipTriangle(trisToRaster)
     rasterizeStart = GetCPUTime() -- Timing
     for i = 1, nNewTriangles do
 
-        -- Draw with texture
-        if doDrawTextured then
-            texturedTriangle(trisToRaster[i][1], trisToRaster[i][2], trisToRaster[i])
-
-        -- Draw shaded
-        -- TODO: Move to textured triangle
-        elseif doDrawFlatShaded then
-            FillTriangle(trisToRaster[i][1], GetGreyscaleColor(trisToRaster[i].l))
-        end
-
         -- Draw wireframe
-        -- TODO: Should not fill triangle if this is enabled (or have an option for it)
         if doDrawWireframe then
             DrawTriangle(trisToRaster[i][1], 0xFFFFFF)
+
+        -- Draw with texture
+        elseif doDrawTextured then
+            texturedTriangle(trisToRaster[i][1], trisToRaster[i][2], trisToRaster[i])
         end
 
         -- Debug

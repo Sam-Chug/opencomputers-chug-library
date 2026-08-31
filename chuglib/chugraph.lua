@@ -62,7 +62,7 @@ local function packPixel(x, y, fore, back, char, update)
     local index = y * funcWidth + x
     colorBuffer[index] = (fore << 24) + (back or 0x000000)
     charBuffer[index] = char
-    drawBuffer[index] = update or true
+    drawBuffer[index] = update
 end
 
 local function getPixelChar(x, y)
@@ -152,25 +152,18 @@ local function drawCharGroup(drawGroups)
     end
 end
 
--- Check if pixel requires a redraw, also checks for other screen res modes
-local function needsUpdate(x, y)
-    if getPixelUpdateState(x, y) then return true end
-    if getPixelUpdateState(x, y + 1) then return true end
-    return false
-end
-
 -- Use real-screen coordinates to return compiled pixel data based on the set drawing mode
 local function returnPixelData(x, y)
 
     -- Get char of pixel
-    local char = getPixelChar(x, y)
+    local char = charBuffer[y * funcWidth + x]
 
     -- If char unset, return pixel data
     if char == nil then
 
         -- Get top and bottom colors
-        local fore = getPixelForeColor(x, y)
-        local downFore = getPixelForeColor(x, y + 1)
+        local fore = colorBuffer[y * funcWidth + x] >> 24
+        local downFore = colorBuffer[(y + 1) * funcWidth + x] >> 24
 
         if fore == downFore then
             -- same color, send full block
@@ -181,7 +174,7 @@ local function returnPixelData(x, y)
         end
     -- Else, return char with pixel data
     else
-        return getPixelForeColor(x, y), getPixelBackColor(x, y), char, true
+        return colorBuffer[y * funcWidth + x] >> 24, colorBuffer[y * funcWidth + x] % 16777216, char, true
     end
 end
 
@@ -202,8 +195,10 @@ local function DrawFrame()
             if x + xSkipIndex > funcWidth then goto skipx end
 
             -- If pixel doesn't require update, skip
-            if not needsUpdate(x + xSkipIndex, y) then goto continue end
+            if drawBuffer[y * funcWidth + x + xSkipIndex] then goto startGroup
+            elseif not drawBuffer[(y + 1) * funcWidth + x + xSkipIndex] then goto continue end
 
+            ::startGroup::
             -- Fore is the color of the first pixel put to the screen, (favor top-most pixel?)
             -- Back is the background of the first pixel put to the screen
             -- If initially the same, set back to the first available second
@@ -336,7 +331,14 @@ local function DrawFrame()
         xSkipIndex = 0
     end
     -- Finally, draw and apply new frame data, then reset update value for all pixels
-    drawCharGroup(drawGroup)
+    -- drawCharGroup(drawGroup)
+    for rKey, rVal in pairs(drawGroup) do
+        for cKey, cVal in pairs(rVal) do
+            for i = 1, #cVal[1] do
+                set(cVal[1][i], cVal[2][i], rKey, cKey, cVal[3][i])
+            end
+        end
+    end
     drawGroup = nil
 end
 
@@ -351,7 +353,7 @@ local function addToFrameBuffer(x, y, foreColor, backColor, char)
     if x < 1 or x > funcWidth or y < 1 or y > funcHeight then return end
 
     -- Set pixel data from function args
-    packPixel(x, y, foreColor, backColor, char)
+    packPixel(x, y, foreColor, backColor, char, true)
 end
 
 -- Set index and consecutive indices to string pixel data

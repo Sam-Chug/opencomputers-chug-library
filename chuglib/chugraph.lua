@@ -195,6 +195,8 @@ local function DrawFrame()
             if x + xSkipIndex > funcWidth then goto skipx end
 
             -- If pixel doesn't require update, skip
+            indexTop = y * funcWidth + x + xSkipIndex
+            indexBot = (y + 1) * funcWidth + x + xSkipIndex
             if drawBuffer[y * funcWidth + x + xSkipIndex] then goto startGroup
             elseif not drawBuffer[(y + 1) * funcWidth + x + xSkipIndex] then goto continue end
 
@@ -204,8 +206,6 @@ local function DrawFrame()
             -- If initially the same, set back to the first available second
 
             -- Mark pixel as finished updating
-            indexTop = y * funcWidth + x + xSkipIndex
-            indexBot = (y + 1) * funcWidth + x + xSkipIndex
             drawBuffer[indexTop] = false
             drawBuffer[indexBot] = false
 

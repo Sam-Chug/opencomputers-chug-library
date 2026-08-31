@@ -5,6 +5,10 @@ local _, ops = shell.parse(...)
 local computer = require("computer")
 local version = "0.1.0a"
 
+local function ParseBMP(fileName)
+
+end
+
 -- Graphics Library
 local gpu = require("chugraph")
 gpu.SetMainGPU(component.gpu, "doubleHeight", true, true)

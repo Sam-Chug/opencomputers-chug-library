@@ -46,6 +46,7 @@ local lightBias = 0.3                       -- Softens faces that are 90 degrees
 local fNear = 0.25                          -- Near plane distance
 local fFar = 1000                           -- Far plane distance
 local fFov = 90                             -- Field of view
+local minRastArea = 0.1                     -- Any triangle with an area below this value will not be drawn
 
 local modelFile = "teapot.obj"              -- Default loaded model, pretty much just for debugging
 
@@ -736,7 +737,7 @@ local function texturedTriangle(p, u, tri)
         p[2][1] * (p[3][2] - p[1][2]) +
         p[3][1] * (p[1][2] - p[2][2])
     )
-    if area < 0.1 then goto skipRast end
+    if area < minRastArea then goto skipRast end
 
     if (p[2][2] < p[1][2]) then
         p[1][1], p[2][1] = p[2][1], p[1][1]

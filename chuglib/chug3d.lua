@@ -896,7 +896,7 @@ local function texturedTriangle(p, u, tri)
 end
 
 local rasterizeStart; local rasterizeCumulative = 0
-local clipTrisToRaster = {}
+local clipTrisToRaster, testTri, vClipped = {}, {}, {}
 
 -- Clip each triangle against each side of the viewport
 -- After clipping, rasterize each triangle
@@ -922,7 +922,7 @@ local function viewportClipTriangle(triToRaster)
         local nTrisToAdd = 0
         while nNewTriangles > 0 do
 
-            local testTri = {
+            testTri = {
                 clipTrisToRaster[1][1],
                 clipTrisToRaster[1][2]
             }
@@ -930,54 +930,54 @@ local function viewportClipTriangle(triToRaster)
 
             -- Check against each plane of the viewport
             -- Before sending to clip, make sure at least one point actually lies outside of that viewport plane
-            local clipped = {}
+            vClipped = {}
             if p == 1 then
                 -- Top
                 if testTri[1][1][2] < 1 or testTri[1][2][2] < 1 or testTri[1][3][2] < 1 then
-                    nTrisToAdd, clipped[1], clipped[2] = triClipPlane({0, 0, 0}, {0, 1, 0}, testTri)
+                    nTrisToAdd, vClipped[1], vClipped[2] = triClipPlane({0, 0, 0}, {0, 1, 0}, testTri)
                 else
                     nTrisToAdd = -1
-                    clipped[1] = testTri
+                    vClipped[1] = testTri
                 end
 			elseif p == 2 then
                 -- Bottom
                 if testTri[1][1][2] > screenHeight or testTri[1][2][2] > screenHeight or testTri[1][3][2] > screenHeight then
-                    nTrisToAdd, clipped[1], clipped[2] = triClipPlane({0, screenHeight, 0}, {0, -1, 0}, testTri)
+                    nTrisToAdd, vClipped[1], vClipped[2] = triClipPlane({0, screenHeight, 0}, {0, -1, 0}, testTri)
                 else
                     nTrisToAdd = -1
-                    clipped[1] = testTri
+                    vClipped[1] = testTri
                 end
             elseif p == 3 then
                 -- Left
                 if testTri[1][1][1] < 1 or testTri[1][2][1] < 1 or testTri[1][3][1] < 1 then
-                    nTrisToAdd, clipped[1], clipped[2] = triClipPlane({1, 0, 0}, {1, 0, 0}, testTri)
+                    nTrisToAdd, vClipped[1], vClipped[2] = triClipPlane({1, 0, 0}, {1, 0, 0}, testTri)
                 else
                     nTrisToAdd = -1
-                    clipped[1] = testTri
+                    vClipped[1] = testTri
                 end
 			elseif p == 4 then
                 -- Right
                 if testTri[1][1][1] > screenWidth or testTri[1][2][1] > screenWidth or testTri[1][3][1] > screenWidth then
-                    nTrisToAdd, clipped[1], clipped[2] = triClipPlane({screenWidth + 1, 0, 0}, {-1, 0, 0}, testTri)
+                    nTrisToAdd, vClipped[1], vClipped[2] = triClipPlane({screenWidth + 1, 0, 0}, {-1, 0, 0}, testTri)
                 else
                     nTrisToAdd = -1
-                    clipped[1] = testTri
+                    vClipped[1] = testTri
                 end
             end
 
             -- TODO: Do this more elegantly
             -- If no clipping occurred, just add triangle
             if nTrisToAdd == -1 then
-                TInsert(clipTrisToRaster, {clipped[1][1], clipped[1][2], triToRaster[3], triToRaster[4], triToRaster[5]})
+                TInsert(clipTrisToRaster, {vClipped[1][1], vClipped[1][2], triToRaster[3], triToRaster[4], triToRaster[5]})
             -- If clipping occurred, add all new triangles
             else
                 for w = 1, nTrisToAdd do
-                    TInsert(clipTrisToRaster, {clipped[w][1], clipped[w][2], triToRaster[3], triToRaster[4], triToRaster[5]})
+                    TInsert(clipTrisToRaster, {vClipped[w][1], vClipped[w][2], triToRaster[3], triToRaster[4], triToRaster[5]})
                 end
             end
 
             TRemove(clipTrisToRaster, 1)
-            clipped = nil
+            vClipped = nil
         end
         nNewTriangles = #clipTrisToRaster
     end
@@ -1014,6 +1014,8 @@ end
 local projectionStart; local projectionCumulative = 0
 local segmentTimeStart; local segmentCumulative = 0
 local lazyCulledCount = 0
+local pClipped, nPClipped = {}, 0
+local nearPlane, nearNormal = {0, 0, fNear}, {0, 0, 1}
 
 -- Project verts, and then triangles from loaded mesh data
 -- Each triangle gets sent into the rasterizer
@@ -1044,11 +1046,7 @@ local function rasterizeMesh()
     vLookDir = matrixMultiplyVector(matCameraRot, vTarget)
     vTarget = vectorAdd(vCamera, vLookDir)
     local matCamera = matrixPointAt(vCamera, vTarget, vUp) -- vCamera, vTarget, vUp
-
-    -- Matrix view from camera
     local matView = matrixQuickInverse(matCamera)
-    local nearPlane = {0, 0, fNear}
-    local nearNormal = {0, 0, 1}
 
     -- First, project vertices
     for i = 1, loadedMesh.vertCount do
@@ -1089,8 +1087,7 @@ local function rasterizeMesh()
 
             -- Clip triangles against near plane
             -- TODO: Is there a quick check we can perform to skip this step for tris beyond the near plane?
-            local clippedTris, clipped = 0, {{}, {}}
-            clippedTris, clipped[1], clipped[2] = triClipPlane(nearPlane, nearNormal, {
+            nPClipped, pClipped[1], pClipped[2] = triClipPlane(nearPlane, nearNormal, {
                 {loadedMesh.vsVert[loadedMesh.tris[i][1][1]],
                  loadedMesh.vsVert[loadedMesh.tris[i][1][2]],
                  loadedMesh.vsVert[loadedMesh.tris[i][1][3]]},
@@ -1100,57 +1097,57 @@ local function rasterizeMesh()
             })
 
             projectionCumulative = projectionCumulative + (GetCPUTime() - projectionStart) -- Timing point end
-            for n = 1, clippedTris do
+            for n = 1, nPClipped do
                 projectionStart = GetCPUTime()
 
                 -- Project points and uvs from 3D to 2D
-                clipped[n][1][1] = matrixMultiplyVector(matProj, clipped[n][1][1])
-                clipped[n][1][2] = matrixMultiplyVector(matProj, clipped[n][1][2])
-                clipped[n][1][3] = matrixMultiplyVector(matProj, clipped[n][1][3])
-                clipped[n][2][1][1] = clipped[n][2][1][1] / clipped[n][1][1][4]
-                clipped[n][2][2][1] = clipped[n][2][2][1] / clipped[n][1][2][4]
-                clipped[n][2][3][1] = clipped[n][2][3][1] / clipped[n][1][3][4]
-                clipped[n][2][1][2] = clipped[n][2][1][2] / clipped[n][1][1][4]
-                clipped[n][2][2][2] = clipped[n][2][2][2] / clipped[n][1][2][4]
-                clipped[n][2][3][2] = clipped[n][2][3][2] / clipped[n][1][3][4]
-                clipped[n][2][1][3] = 1 / clipped[n][1][1][4]
-                clipped[n][2][2][3] = 1 / clipped[n][1][2][4]
-                clipped[n][2][3][3] = 1 / clipped[n][1][3][4]
+                pClipped[n][1][1] = matrixMultiplyVector(matProj, pClipped[n][1][1])
+                pClipped[n][1][2] = matrixMultiplyVector(matProj, pClipped[n][1][2])
+                pClipped[n][1][3] = matrixMultiplyVector(matProj, pClipped[n][1][3])
+                pClipped[n][2][1][1] = pClipped[n][2][1][1] / pClipped[n][1][1][4]
+                pClipped[n][2][2][1] = pClipped[n][2][2][1] / pClipped[n][1][2][4]
+                pClipped[n][2][3][1] = pClipped[n][2][3][1] / pClipped[n][1][3][4]
+                pClipped[n][2][1][2] = pClipped[n][2][1][2] / pClipped[n][1][1][4]
+                pClipped[n][2][2][2] = pClipped[n][2][2][2] / pClipped[n][1][2][4]
+                pClipped[n][2][3][2] = pClipped[n][2][3][2] / pClipped[n][1][3][4]
+                pClipped[n][2][1][3] = 1 / pClipped[n][1][1][4]
+                pClipped[n][2][2][3] = 1 / pClipped[n][1][2][4]
+                pClipped[n][2][3][3] = 1 / pClipped[n][1][3][4]
 
                 -- Scale into view
-                clipped[n][1][1] = vectorDiv(clipped[n][1][1], clipped[n][1][1][4])
-                clipped[n][1][2] = vectorDiv(clipped[n][1][2], clipped[n][1][2][4])
-                clipped[n][1][3] = vectorDiv(clipped[n][1][3], clipped[n][1][3][4])
+                pClipped[n][1][1] = vectorDiv(pClipped[n][1][1], pClipped[n][1][1][4])
+                pClipped[n][1][2] = vectorDiv(pClipped[n][1][2], pClipped[n][1][2][4])
+                pClipped[n][1][3] = vectorDiv(pClipped[n][1][3], pClipped[n][1][3][4])
 
                 -- Invert XY
-                clipped[n][1][1][1] = -clipped[n][1][1][1]
-				clipped[n][1][2][1] = -clipped[n][1][2][1]
-				clipped[n][1][3][1] = -clipped[n][1][3][1]
-				clipped[n][1][1][2] = -clipped[n][1][1][2]
-				clipped[n][1][2][2] = -clipped[n][1][2][2]
-				clipped[n][1][3][2] = -clipped[n][1][3][2]
+                pClipped[n][1][1][1] = -pClipped[n][1][1][1]
+				pClipped[n][1][2][1] = -pClipped[n][1][2][1]
+				pClipped[n][1][3][1] = -pClipped[n][1][3][1]
+				pClipped[n][1][1][2] = -pClipped[n][1][1][2]
+				pClipped[n][1][2][2] = -pClipped[n][1][2][2]
+				pClipped[n][1][3][2] = -pClipped[n][1][3][2]
 
                 -- Offset verts into visible normalized space
                 local vOffsetView = {1, 1, 0}
-                clipped[n][1][1] = vectorAdd(clipped[n][1][1], vOffsetView)
-                clipped[n][1][2] = vectorAdd(clipped[n][1][2], vOffsetView)
-                clipped[n][1][3] = vectorAdd(clipped[n][1][3], vOffsetView)
-                clipped[n][1][1][1] = clipped[n][1][1][1] * halfWidth
-                clipped[n][1][2][1] = clipped[n][1][2][1] * halfWidth
-                clipped[n][1][3][1] = clipped[n][1][3][1] * halfWidth
-                clipped[n][1][1][2] = clipped[n][1][1][2] * halfHeight
-                clipped[n][1][2][2] = clipped[n][1][2][2] * halfHeight
-                clipped[n][1][3][2] = clipped[n][1][3][2] * halfHeight
+                pClipped[n][1][1] = vectorAdd(pClipped[n][1][1], vOffsetView)
+                pClipped[n][1][2] = vectorAdd(pClipped[n][1][2], vOffsetView)
+                pClipped[n][1][3] = vectorAdd(pClipped[n][1][3], vOffsetView)
+                pClipped[n][1][1][1] = pClipped[n][1][1][1] * halfWidth
+                pClipped[n][1][2][1] = pClipped[n][1][2][1] * halfWidth
+                pClipped[n][1][3][1] = pClipped[n][1][3][1] * halfWidth
+                pClipped[n][1][1][2] = pClipped[n][1][1][2] * halfHeight
+                pClipped[n][1][2][2] = pClipped[n][1][2][2] * halfHeight
+                pClipped[n][1][3][2] = pClipped[n][1][3][2] * halfHeight
 
                 -- Copy texture over
-                clipped[n][3] = loadedMesh.tris[i][3]
-                clipped[n][4] = loadedMesh.tris[i][4]
-                clipped[n][5] = lightDp
+                pClipped[n][3] = loadedMesh.tris[i][3]
+                pClipped[n][4] = loadedMesh.tris[i][4]
+                pClipped[n][5] = lightDp
 
                 -- Send triangle to be viewport clipped and then rendered
                 projectionCumulative = projectionCumulative + (GetCPUTime() - projectionStart)
-                viewportClipTriangle(clipped[n])
-                clipped[n] = nil
+                viewportClipTriangle(pClipped[n])
+                pClipped[n] = nil
             end
         elseif normalToCamera > bfcLazyThreshold then
             -- If tri is facing far enough away from the camera, halt projection for a frame or two

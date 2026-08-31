@@ -724,12 +724,12 @@ local function texturedTriangle(p, u, tri)
 
     -- TODO: Not too sure on this one ->
     -- But I doubt this program will get to the point where a model is made from small enough tris for this to matter
-    local area = 0.5 * abs(
-        p[1][1] * (p[2][2] - p[3][2]) +
-        p[2][1] * (p[3][2] - p[1][2]) +
-        p[3][1] * (p[1][2] - p[2][2])
-    )
-    if area < minRastArea then goto skipRast end
+    -- local area = 0.5 * abs(
+    --     p[1][1] * (p[2][2] - p[3][2]) +
+    --     p[2][1] * (p[3][2] - p[1][2]) +
+    --     p[3][1] * (p[1][2] - p[2][2])
+    -- )
+    -- if area < minRastArea then goto skipRast end
 
     if (p[2][2] < p[1][2]) then
         p[1][1], p[2][1] = p[2][1], p[1][1]

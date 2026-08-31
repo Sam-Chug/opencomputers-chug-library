@@ -370,19 +370,8 @@ local function triClipPlane(planeP, planeN, inTri)
     elseif nInsideP == 1 and nOutsideP == 2 then
 
         -- Triangle needs to be clipped, two points lie outside
-        local outTri1 = {{{0, 0, 0, 1}, {0, 0, 0, 1}, {0, 0, 0, 1}}, {{0, 0, 1}, {0, 0, 1}, {0, 0, 1}}}
+        local outTri1 = {{inTri[1][insidePi[1]], {0, 0, 0, 1}, {0, 0, 0, 1}}, {{inTri[2][insideTi[1]][1], inTri[2][insideTi[1]][2], inTri[2][insideTi[1]][3]}, {0, 0, 1}, {0, 0, 1}}}
 
-        outTri1[1][1] = {
-            inTri[1][insidePi[1]][1],
-            inTri[1][insidePi[1]][2],
-            inTri[1][insidePi[1]][3],
-            inTri[1][insidePi[1]][4]
-        }
-        outTri1[2][1] = {
-            inTri[2][insideTi[1]][1],
-            inTri[2][insideTi[1]][2],
-            inTri[2][insideTi[1]][3]
-        }
         local t
         local lsDP = vectorDotProduct(inTri[1][insidePi[1]], planeN)
         outTri1[1][2], t = vectorIntersectPlane(
@@ -410,15 +399,10 @@ local function triClipPlane(planeP, planeN, inTri)
     elseif nInsideP == 2 and nOutsideP == 1 then
 
         -- Triangle needs to be clipped, one pointing lies outside
-        local outTri1 = {{{0, 0, 0, 1}, {0, 0, 0, 1}, {0, 0, 0, 1}}, {{0, 0, 1}, {0, 0, 1}, {0, 0, 1}}}
+        local outTri1 = {{inTri[1][insidePi[1]], inTri[1][insidePi[2]], {0, 0, 0, 1}}, {inTri[2][insideTi[1]], inTri[2][insideTi[2]], {0, 0, 1}}}
         local outTri2 = {{{0, 0, 0, 1}, {0, 0, 0, 1}, {0, 0, 0, 1}}, {{0, 0, 1}, {0, 0, 1}, {0, 0, 1}}}
 
         local t
-        outTri1[1][1] = {inTri[1][insidePi[1]][1], inTri[1][insidePi[1]][2], inTri[1][insidePi[1]][3], inTri[1][insidePi[1]][4]}
-        outTri1[1][2] = {inTri[1][insidePi[2]][1], inTri[1][insidePi[2]][2], inTri[1][insidePi[2]][3], inTri[1][insidePi[2]][4]}
-        outTri1[2][1] = {inTri[2][insideTi[1]][1], inTri[2][insideTi[1]][2], inTri[2][insideTi[1]][3]}
-        outTri1[2][2] = {inTri[2][insideTi[2]][1], inTri[2][insideTi[2]][2], inTri[2][insideTi[2]][3]}
-
         local leDP = vectorDotProduct(inTri[1][outsidePi[1]], planeN)
         outTri1[1][3], t = vectorIntersectPlane(
             planeDP,
@@ -433,9 +417,7 @@ local function triClipPlane(planeP, planeN, inTri)
         outTri2[2][1] = {inTri[2][insideTi[2]][1], inTri[2][insideTi[2]][2], inTri[2][insideTi[2]][3]}
 
         outTri2[1][2] = {outTri1[1][3][1], outTri1[1][3][2], outTri1[1][3][3], outTri1[1][3][4]}
-        outTri2[2][2][1] = outTri1[2][3][1]
-        outTri2[2][2][2] = outTri1[2][3][2]
-        outTri2[2][2][3] = outTri1[2][3][3]
+        outTri2[2][2] = {outTri1[2][3][1], outTri1[2][3][2], outTri1[2][3][3]}
         outTri2[1][3], t = vectorIntersectPlane(
             planeDP,
             vectorDotProduct(inTri[1][insidePi[2]], planeN), leDP,
@@ -1015,7 +997,7 @@ local projectionStart; local projectionCumulative = 0
 local segmentTimeStart; local segmentCumulative = 0
 local lazyCulledCount = 0
 local pClipped, nPClipped = {}, 0
-local nearPlane, nearNormal = {0, 0, fNear}, {0, 0, 1}
+local nearPlane, nearNormal, vsOffset = {0, 0, fNear}, {0, 0, 1}, {1, 1, 0}
 
 -- Project verts, and then triangles from loaded mesh data
 -- Each triangle gets sent into the rasterizer
@@ -1128,10 +1110,9 @@ local function rasterizeMesh()
 				pClipped[n][1][3][2] = -pClipped[n][1][3][2]
 
                 -- Offset verts into visible normalized space
-                local vOffsetView = {1, 1, 0}
-                pClipped[n][1][1] = vectorAdd(pClipped[n][1][1], vOffsetView)
-                pClipped[n][1][2] = vectorAdd(pClipped[n][1][2], vOffsetView)
-                pClipped[n][1][3] = vectorAdd(pClipped[n][1][3], vOffsetView)
+                pClipped[n][1][1] = vectorAdd(pClipped[n][1][1], vsOffset)
+                pClipped[n][1][2] = vectorAdd(pClipped[n][1][2], vsOffset)
+                pClipped[n][1][3] = vectorAdd(pClipped[n][1][3], vsOffset)
                 pClipped[n][1][1][1] = pClipped[n][1][1][1] * halfWidth
                 pClipped[n][1][2][1] = pClipped[n][1][2][1] * halfWidth
                 pClipped[n][1][3][1] = pClipped[n][1][3][1] * halfWidth

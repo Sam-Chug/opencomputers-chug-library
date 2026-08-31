@@ -336,9 +336,8 @@ local insidePi = {0, 0, 0}; local outsidePi = {0, 0, 0}
 local insideTi = {0, 0, 0}; local outsideTi = {0, 0, 0}
 
 -- Test if triangle clips plane, return clipped triangles if so
-local function triClipPlane(planeP, planeN, inTri)
+local function triClipPlane(planeDP, planeN, inTri)
 
-    local planeDP = vectorDotProduct(planeN, planeP)
     local function dist(p)
         return planeN[1] * p[1] + planeN[2] * p[2] + planeN[3] * p[3] - planeDP
     end
@@ -568,6 +567,12 @@ local trisDrawnLast = 0
 local elapsedTime = 0.1
 local timeLast, nowTime = computer.uptime(), computer.uptime()
 
+-- Near plane and viewspace offset
+local nearPlane, nearNormal, vsOffset = {0, 0, fNear}, {0, 0, 1}, {1, 1, 0}
+
+-- Reusable dot products
+local vsLeftDP, vsRightDP, vsTopDP, vsBottomDP, nearDP
+
 -- Get elapsed time per-frame for mesh rotation, if needed
 local function updateElapsedTime()
     nowTime = computer.uptime()
@@ -583,6 +588,12 @@ local function createMesh()
     screenWidth = gpu.GetScreenWidth(); screenHeight = gpu.GetScreenHeight()
     halfWidth = 0.5 * screenWidth; halfHeight = 0.5 * screenHeight
     matProj = matrixMakeProjection(fFov, gpu.GetAspectRatio(), fNear, fFar)
+
+    vsLeftDP = vectorDotProduct({1, 0, 0}, {1, 0, 0})
+    vsRightDP = vectorDotProduct({screenWidth + 1, 0, 0}, {-1, 0, 0})
+    vsTopDP = vectorDotProduct({0, 0, 0}, {0, 1, 0})
+    vsBottomDP = vectorDotProduct({0, screenHeight, 0}, {0, -1, 0})
+    nearDP = vectorDotProduct(nearPlane, nearNormal)
 
     -- Load model, or default to the cube
     -- Verts, Projected Verts, Viewspace Verts, Tris, Textures, Lazy BF Count Tricount, Vertcount
@@ -916,7 +927,7 @@ local function viewportClipTriangle(triToRaster)
             if p == 1 then
                 -- Top
                 if testTri[1][1][2] < 1 or testTri[1][2][2] < 1 or testTri[1][3][2] < 1 then
-                    nTrisToAdd, vClipped[1], vClipped[2] = triClipPlane({0, 0, 0}, {0, 1, 0}, testTri)
+                    nTrisToAdd, vClipped[1], vClipped[2] = triClipPlane(vsTopDP, {0, 1, 0}, testTri)
                 else
                     nTrisToAdd = -1
                     vClipped[1] = testTri
@@ -924,7 +935,7 @@ local function viewportClipTriangle(triToRaster)
 			elseif p == 2 then
                 -- Bottom
                 if testTri[1][1][2] > screenHeight or testTri[1][2][2] > screenHeight or testTri[1][3][2] > screenHeight then
-                    nTrisToAdd, vClipped[1], vClipped[2] = triClipPlane({0, screenHeight, 0}, {0, -1, 0}, testTri)
+                    nTrisToAdd, vClipped[1], vClipped[2] = triClipPlane(vsBottomDP, {0, -1, 0}, testTri)
                 else
                     nTrisToAdd = -1
                     vClipped[1] = testTri
@@ -932,7 +943,7 @@ local function viewportClipTriangle(triToRaster)
             elseif p == 3 then
                 -- Left
                 if testTri[1][1][1] < 1 or testTri[1][2][1] < 1 or testTri[1][3][1] < 1 then
-                    nTrisToAdd, vClipped[1], vClipped[2] = triClipPlane({1, 0, 0}, {1, 0, 0}, testTri)
+                    nTrisToAdd, vClipped[1], vClipped[2] = triClipPlane(vsLeftDP, {1, 0, 0}, testTri)
                 else
                     nTrisToAdd = -1
                     vClipped[1] = testTri
@@ -940,7 +951,7 @@ local function viewportClipTriangle(triToRaster)
 			elseif p == 4 then
                 -- Right
                 if testTri[1][1][1] > screenWidth or testTri[1][2][1] > screenWidth or testTri[1][3][1] > screenWidth then
-                    nTrisToAdd, vClipped[1], vClipped[2] = triClipPlane({screenWidth + 1, 0, 0}, {-1, 0, 0}, testTri)
+                    nTrisToAdd, vClipped[1], vClipped[2] = triClipPlane(vsRightDP, {-1, 0, 0}, testTri)
                 else
                     nTrisToAdd = -1
                     vClipped[1] = testTri
@@ -997,7 +1008,6 @@ local projectionStart; local projectionCumulative = 0
 local segmentTimeStart; local segmentCumulative = 0
 local lazyCulledCount = 0
 local pClipped, nPClipped = {}, 0
-local nearPlane, nearNormal, vsOffset = {0, 0, fNear}, {0, 0, 1}, {1, 1, 0}
 
 -- Project verts, and then triangles from loaded mesh data
 -- Each triangle gets sent into the rasterizer
@@ -1069,7 +1079,7 @@ local function rasterizeMesh()
 
             -- Clip triangles against near plane
             -- TODO: Is there a quick check we can perform to skip this step for tris beyond the near plane?
-            nPClipped, pClipped[1], pClipped[2] = triClipPlane(nearPlane, nearNormal, {
+            nPClipped, pClipped[1], pClipped[2] = triClipPlane(nearDP, nearNormal, {
                 {loadedMesh.vsVert[loadedMesh.tris[i][1][1]],
                  loadedMesh.vsVert[loadedMesh.tris[i][1][2]],
                  loadedMesh.vsVert[loadedMesh.tris[i][1][3]]},

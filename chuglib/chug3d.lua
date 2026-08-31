@@ -884,7 +884,8 @@ local function texturedTriangle(p, u, tri)
 end
 
 local rasterizeStart; local rasterizeCumulative = 0
-local clipTrisToRaster, testTri, vClipped = {}, {}, {}
+local testTri, vClipped = {}, {}
+local planeTopN, planeBotN, planeLeftN, planeRightN = {0, 1, 0}, {0, -1, 0}, {1, 0, 0}, {-1, 0, 0}
 
 -- Clip each triangle against each side of the viewport
 -- After clipping, rasterize each triangle
@@ -893,10 +894,10 @@ local function viewportClipTriangle(trisToRaster)
     -- Check if any points are outside of screenspace
     local nNewTriangles = 1
     if trisToRaster[1][1][1][1] < 1 or trisToRaster[1][1][1][1] > screenWidth then goto clipTri end
-    if trisToRaster[1][1][1][2] < 1 or trisToRaster[1][1][1][2] > screenHeight then goto clipTri end
     if trisToRaster[1][1][2][1] < 1 or trisToRaster[1][1][2][1] > screenWidth then goto clipTri end
-    if trisToRaster[1][1][2][2] < 1 or trisToRaster[1][1][2][2] > screenHeight then goto clipTri end
     if trisToRaster[1][1][3][1] < 1 or trisToRaster[1][1][3][1] > screenWidth then goto clipTri end
+    if trisToRaster[1][1][1][2] < 1 or trisToRaster[1][1][1][2] > screenHeight then goto clipTri end
+    if trisToRaster[1][1][2][2] < 1 or trisToRaster[1][1][2][2] > screenHeight then goto clipTri end
     if trisToRaster[1][1][3][2] < 1 or trisToRaster[1][1][3][2] > screenHeight then goto clipTri end
     goto skipClip
 
@@ -907,62 +908,43 @@ local function viewportClipTriangle(trisToRaster)
         local nTrisToAdd = 0
         while nNewTriangles > 0 do
 
-            testTri = {
-                trisToRaster[1][1],
-                trisToRaster[1][2]
-            }
+            testTri = {trisToRaster[1][1], trisToRaster[1][2]}
             nNewTriangles = nNewTriangles - 1
+            nTrisToAdd = 1
 
             -- Check against each plane of the viewport
             -- Before sending to clip, make sure at least one point actually lies outside of that viewport plane
-            vClipped = {}
+            vClipped = {testTri}
             if p == 1 then
                 -- Top
                 if testTri[1][1][2] < 1 or testTri[1][2][2] < 1 or testTri[1][3][2] < 1 then
-                    nTrisToAdd, vClipped[1], vClipped[2] = triClipPlane(vsTopDP, {0, 1, 0}, testTri)
-                else
-                    nTrisToAdd = -1
-                    vClipped[1] = testTri
+                    nTrisToAdd, vClipped[1], vClipped[2] = triClipPlane(vsTopDP, planeTopN, testTri)
                 end
 			elseif p == 2 then
                 -- Bottom
                 if testTri[1][1][2] > screenHeight or testTri[1][2][2] > screenHeight or testTri[1][3][2] > screenHeight then
-                    nTrisToAdd, vClipped[1], vClipped[2] = triClipPlane(vsBottomDP, {0, -1, 0}, testTri)
-                else
-                    nTrisToAdd = -1
-                    vClipped[1] = testTri
+                    nTrisToAdd, vClipped[1], vClipped[2] = triClipPlane(vsBottomDP, planeBotN, testTri)
                 end
             elseif p == 3 then
                 -- Left
                 if testTri[1][1][1] < 1 or testTri[1][2][1] < 1 or testTri[1][3][1] < 1 then
-                    nTrisToAdd, vClipped[1], vClipped[2] = triClipPlane(vsLeftDP, {1, 0, 0}, testTri)
-                else
-                    nTrisToAdd = -1
-                    vClipped[1] = testTri
+                    nTrisToAdd, vClipped[1], vClipped[2] = triClipPlane(vsLeftDP, planeLeftN, testTri)
                 end
 			elseif p == 4 then
                 -- Right
                 if testTri[1][1][1] > screenWidth or testTri[1][2][1] > screenWidth or testTri[1][3][1] > screenWidth then
-                    nTrisToAdd, vClipped[1], vClipped[2] = triClipPlane(vsRightDP, {-1, 0, 0}, testTri)
-                else
-                    nTrisToAdd = -1
-                    vClipped[1] = testTri
+                    nTrisToAdd, vClipped[1], vClipped[2] = triClipPlane(vsRightDP, planeRightN, testTri)
                 end
             end
 
-            -- TODO: Do this more elegantly
             -- If no clipping occurred, just add triangle
-            if nTrisToAdd == -1 then
-                TInsert(trisToRaster, {vClipped[1][1], vClipped[1][2], trisToRaster[1][3], trisToRaster[1][4], trisToRaster[1][5]})
-            -- If clipping occurred, add all new triangles
-            else
-                for w = 1, nTrisToAdd do
-                    TInsert(trisToRaster, {vClipped[w][1], vClipped[w][2], trisToRaster[1][3], trisToRaster[1][4], trisToRaster[1][5]})
-                end
+            for w = 1, nTrisToAdd do
+                TInsert(trisToRaster, {vClipped[w][1], vClipped[w][2], trisToRaster[1][3], trisToRaster[1][4], trisToRaster[1][5]})
             end
 
             TRemove(trisToRaster, 1)
             vClipped = nil
+            testTri = nil
         end
         nNewTriangles = #trisToRaster
     end

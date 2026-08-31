@@ -1036,7 +1036,6 @@ local function rasterizeMesh()
             if doNormalFlatColoring then tColor = getColorFromNormal(normal) end
 
             -- Clip triangles against near plane
-            -- TODO: Is there a quick check we can perform to skip this step for tris beyond the near plane?
             nPClipped, pClipped[1], pClipped[2] = triClipPlane(nearDP, nearNormal, {
                 {loadedMesh.vsVert[loadedMesh.vInd[i][1]],
                  loadedMesh.vsVert[loadedMesh.vInd[i][2]],

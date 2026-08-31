@@ -197,8 +197,8 @@ local function DrawFrame()
             -- If pixel doesn't require update, skip
             indexTop = y * funcWidth + x + xSkipIndex
             indexBot = (y + 1) * funcWidth + x + xSkipIndex
-            if drawBuffer[y * funcWidth + x + xSkipIndex] then goto startGroup
-            elseif not drawBuffer[(y + 1) * funcWidth + x + xSkipIndex] then goto continue end
+            if drawBuffer[indexTop] then goto startGroup
+            elseif not drawBuffer[indexBot] then goto continue end
 
             -- Fore is the color of the first pixel put to the screen, (favor top-most pixel?)
             -- Back is the background of the first pixel put to the screen

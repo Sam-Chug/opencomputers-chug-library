@@ -1,4 +1,4 @@
-local event = require("event")
+local computer = require("computer")
 local shell = require("shell")
 local _, ops = shell.parse(...)
 
@@ -27,7 +27,7 @@ function chugkey.isKeyDown(handler, keyCode)
 end
 
 function chugkey.updateKeypress(handler)
-    local tEvent = table.pack(event.pull(0))
+    local tEvent = table.pack(computer.pullSignal(0))
     local sKey = nil
     -- Parse keycode
     if tEvent[1] == "key_down" then

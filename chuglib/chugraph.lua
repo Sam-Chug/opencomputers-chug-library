@@ -5,7 +5,7 @@ local _, ops = shell.parse(...)
 local computer = require("computer")
 local term = require("term")
 
-local version = "0.3.2a"
+local version = "0.3.3a"
 
 local funcWidth, funcHeight = 0, 0
 local gpu, buffer, screenWidth, screenHeight
@@ -577,21 +577,67 @@ end
 -- TODO: There's a lot of mess in this section
 -- Untangle this crap
 
--- Return nearest valid hex color from input RGB values (0 - 1)
-local function ValidHexFromRGB(r, g, b)
-    r = (r // 0.17) * 51
-    g = ((g // 0.125) * 36.5) // 1
-    b = Min((b // 0.25) * 64, 255)
-    return (r << 16) + (g << 8) + b
+-- Return closest valid color from RGB values ranging from 0-255
+local function ClosestValidHexFromRGB8(r, g, b)
+
+    -- Get value of each channel from 0-1
+    local valR = r / 255
+    local valG = g / 255
+    local valB = b / 255
+    local valGrey = (valR + valG + valB) / 3
+
+    -- Re-inflate values from 0-255, in valid OC increments
+    local fixedR = (valR // 0.17) * 51
+    local fixedG = math.min(((valG // 0.125) * 36.5) // 1, 255)
+    local fixedB = math.min((valB // 0.2) * 64, 255)
+    local fixedGrey = (valGrey * 16 // 1) * 15
+
+    -- Get difference of each fixed channel to the origin channels, and the average distance
+    -- Do the same for grey, to check if a greyscale value may be closer
+    local realDiffAVG = (math.abs(fixedR - r) + math.abs(fixedG - g) + math.abs(fixedB - b)) / 3
+    local greyDiffAVG = (math.abs(fixedGrey - r) + math.abs(fixedGrey - g) + math.abs(fixedGrey - b)) / 3
+
+    -- Return whichever color is closer
+    if realDiffAVG < greyDiffAVG then return (fixedR << 16) + (fixedG << 8) + fixedB
+    else return (fixedGrey << 16) + (fixedGrey << 8) + fixedGrey end
+end
+
+-- Return closest valid color from RGB values ranging from 0-1
+local function ClosestValidHexFromRGB1(r, g, b)
+
+    -- Get 0-255 scaled RGB values to compare against
+    local r255 = r * 255
+    local g255 = g * 255
+    local b255 = b * 255
+
+    -- Get grey value from average RGB channels
+    local valGrey = (r + g + b) / 3
+
+    -- Re-inflate values from 0-255, in valid OC increments
+    local fixedR = (r // 0.17) * 51
+    local fixedG = math.min(((g // 0.125) * 36.5) // 1, 255)
+    local fixedB = math.min((b // 0.2) * 64, 255)
+    local fixedGrey = (valGrey * 16 // 1) * 15
+
+    -- Get difference of each fixed channel to the origin channels, and the average distance
+    -- Do the same for grey, to check if a greyscale value may be closer
+    local realDiffAVG = (math.abs(fixedR - r255) + math.abs(fixedG - g255) + math.abs(fixedB - b255)) / 3
+    local greyDiffAVG = (math.abs(fixedGrey - r255) + math.abs(fixedGrey - g255) + math.abs(fixedGrey - b255)) / 3
+
+    -- Return whichever color is closer
+    if realDiffAVG < greyDiffAVG then return (fixedR << 16) + (fixedG << 8) + fixedB
+    else return (fixedGrey << 16) + (fixedGrey << 8) + fixedGrey end
 end
 
 -- Return greyscale color from input value (0 - 1)
 local function GetGreyscaleColor(value)
+    -- Sanitize input
     if value ~= value then return 0xFF0000 end
+    value = Max(Min(value, 1), 0)
 
+    -- Return valid hex color
     value = (value * 16 // 1) * 15
-    value = (value * 256 * 256) + (value * 256) + value
-    value = Max(Min(value, 0xFFFFFF), 0x000000)
+    value = (value << 16) + (value << 8) + value
     return value
 end
 
@@ -600,30 +646,12 @@ end
 local function GetShadedColor(color, shade)
 
     -- Extract RGB channels, get channel values from 0-1
-    local r = (color >> 16) / 255
-    local g = ((color % 65536) >> 8) / 255
-    local b = (color % 256) / 255
+    local r = (color >> 16) * shade
+    local g = ((color % 65536) >> 8) * shade
+    local b = (color % 256) * shade
 
-    -- Multiply RGB and grayscale values by shade (0-1)
-    -- Also, get the "real" RGB hex value, before crushing back to a valid color code
-    r = r * shade
-    g = g * shade
-    b = b * shade
-    local grey = (r + g + b) / 3
-    local realRGB = ((r * 255 // 1) << 16) + ((g * 255 // 1) << 8) + (b * 255 // 1)
-
-    -- Inflate channel values back to 1-255, rounding to nearest available color index
-    r = (r // 0.17) * 51
-    g = ((g // 0.125) * 36.5) // 1
-    b = Min((b // 0.25) * 64, 255)
-    grey = (grey * 16 // 1) * 15
-
-    -- Recompile into hex color
-    -- Return whichever value is closest to the "real" shaded value
-    local hexRGB = (r << 16) + (g << 8) + b
-    local greyRGB = (grey << 16) + (grey << 8) + grey
-    if Abs(hexRGB - realRGB) < Abs(greyRGB - realRGB) then return hexRGB
-    else return greyRGB end
+    -- Return closest valid color
+    return ClosestValidHexFromRGB8(r, g, b)
 end
 
 -- Blend first color with second color.
@@ -631,8 +659,8 @@ end
 -- 0 -> outputs color 1 and 1 -> outputs color 2
 local function BlendColor(c1, c2, amount)
 
-    local blend = 1 - amount
-    blend = Max(Min(blend, 1), 0)
+    -- Sanitize input blend amount
+    amount = Max(Min(amount, 1), 0)
 
     -- Isolate RGB values from both colors
     local r1 = (c1 >> 16) / 255
@@ -643,36 +671,17 @@ local function BlendColor(c1, c2, amount)
     local b2 = (c2 % 256) / 255
 
     -- Get difference between each RGB value
-    local rDiff = r2 - r1
-    local gDiff = g2 - g1
-    local bDiff = b2 - b1
+    local rDiff = (r2 - r1) * amount
+    local gDiff = (g2 - g1) * amount
+    local bDiff = (b2 - b1) * amount
 
     -- Get blended RGB values and Grey value
-    local rNew = r1 + (rDiff * blend)
-    local gNew = g1 + (gDiff * blend)
-    local bNew = b1 + (bDiff * blend)
-    return ValidHexFromRGB(rNew, gNew, bNew)
+    local rNew = r1 + rDiff
+    local gNew = g1 + gDiff
+    local bNew = b1 + bDiff
 
-    -- This is a flawed approach to getting the closest color/greyscale value
-    -- We need to get the average distance of each 3 "fixed" channels, ->
-    -- then find which color closest matches the real color
-
-    -- local realRGB = ((rNew * 255 // 1) << 16) + ((gNew * 255 // 1) << 8) + (bNew * 255 // 1)
-    -- local greyRGB = GetGreyscaleColor((rNew + gNew + bNew) / 3)
-    -- local hexRGB = ValidHexFromRGB(rNew, gNew, bNew)
-    -- if Abs(hexRGB - realRGB) < Abs(greyRGB - realRGB) then return hexRGB
-    -- else return greyRGB end
-end
-
--- TODO: Probably could be optimized, think about it later
-local function GetClosestValidColor(color)
-
-    -- TODO: Needs to check for greyscale colors
-    local r = (color >> 16) / 255
-    local g = ((color % 65536) >> 8) / 255
-    local b = (color % 256) / 255
-
-    return ValidHexFromRGB(r, g, b)
+    -- Return closest valid color
+    return ClosestValidHexFromRGB1(rNew, gNew, bNew)
 end
 
 -- Unused, unless I really feel like saving ram
@@ -1161,7 +1170,7 @@ return {
     GetScreenWidth = GetScreenWidth,
     GetScreenHeight = GetScreenHeight,
 
-    GetClosestValidColor = GetClosestValidColor,
+    ClosestValidHexFromRGB8 = ClosestValidHexFromRGB8,
     GetGreyscaleColor = GetGreyscaleColor,
     GetShadedColor = GetShadedColor,
     BlendColor = BlendColor,

@@ -642,7 +642,7 @@ local function drawTexturedTriangle(x, y, tri, texU, texV, texW)
         if drawShaded then
             sampleColor = GetShadedColor(sampleColor, tri[5])
         end
-        SetPixel(x, y, BlendColor(sampleColor, backgroundColor, texW ^ depthFadeDist))
+        SetPixel(x, y, BlendColor(backgroundColor, sampleColor, texW ^ depthFadeDist))
 
     -- RGB according to surface normals
     elseif drawNormalColor then

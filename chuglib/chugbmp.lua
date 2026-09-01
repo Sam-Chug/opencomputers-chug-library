@@ -8,7 +8,7 @@ local version = "0.1.0a"
 -- ============================================================
 -- CREDITS
 -- This code is looesly inspired by this repo: https://github.com/max1220/lua-bitmap/tree/master
--- It has been shortened and likely made more finicky to run. But it creates a lot less garbage.
+-- It has been shortened and likely made more finicky to run. But it creates a bit less garbage.
 -- ============================================================
 
 local bmpOffsetHeader = 1

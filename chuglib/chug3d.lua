@@ -40,7 +40,7 @@ local drawDepthBlend = false
 -- Rendering fluff
 local backgroundColor = 0x00DBFF       -- Color of the background in the scene
 local depthFadeDist = 0.4              -- Square depth value by this value when blending colors into the background
-local bfcThreshold = 2.0               -- Cull any face whos dot product against camera normal is above this
+local bfcThreshold = 0.0               -- Cull any face whos dot product against camera normal is above this
 local lightDirection = {0.1, 0.1, -1}  -- [Sunlight-ish](0.3, 1, 0) | [Topdown-ish](0.1, 0.1, -1)
 local shadeMaximum = 5 / 16            -- Maximum darkness in the most shaded areas
 local lightBias = 0.3                  -- Softens faces that are 90 degrees offset to light direction

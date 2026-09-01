@@ -15,6 +15,9 @@ local version = "0.3.1a"
 local gpu = require("chugraph")
 gpu.SetMainGPU(component.gpu, "doubleHeight", true, true)
 
+-- BMP Loader
+local bmp = require("chugbmp")
+
 -- Input manager
 local inputManager = require("chugkey")
 
@@ -37,7 +40,7 @@ local drawDepthBlend = false
 -- Rendering fluff
 local backgroundColor = 0x00DBFF       -- Color of the background in the scene
 local depthFadeDist = 0.4              -- Square depth value by this value when blending colors into the background
-local bfcThreshold = 0.0               -- Cull any face whos dot product against camera normal is above this
+local bfcThreshold = 2.0               -- Cull any face whos dot product against camera normal is above this
 local lightDirection = {0.1, 0.1, -1}  -- [Sunlight-ish](0.3, 1, 0) | [Topdown-ish](0.1, 0.1, -1)
 local shadeMaximum = 5 / 16            -- Maximum darkness in the most shaded areas
 local lightBias = 0.3                  -- Softens faces that are 90 degrees offset to light direction
@@ -535,6 +538,7 @@ local function updateElapsedTime()
 end
 
 -- Load mesh from file and prepare it for rendering
+local textureTest = {}
 local function createMesh()
 
     -- Precalculate some commonly used variables
@@ -555,12 +559,20 @@ local function createMesh()
         vert = {}, pVert = {}, vsVert = {}, -- Raw vertices, and two arrays for storing projected and viewspace vertices
         uvs = {},                           -- Raw texture coordinates
         vInd = {}, uInd = {},               -- For each triangle, its vertex and uv lookup indices
-        triCount = 0, vertCount = 0
+        triCount = 0, vertCount = 0, texIndex = 1
     }
+
+    -- textureTest = bmp.ParseBMP("parrot.bmp")
 
     -- TODO: Look for texture with the same name as the loaded mesh and load it as well
     if fileExists(modelFile) then
         loadedMesh.vert, loadedMesh.uvs, loadedMesh.vInd, loadedMesh.uInd = getMeshFromString(modelFile, nil, true)
+        local texString = modelFile:gsub(".obj", ".bmp")
+        local loadedTex, issue = bmp.ParseBMP(texString)
+        if loadedTex ~= false then
+            loadedTextures[2] = {name = texString, w = #loadedTex, h = #loadedTex[1], tex = loadedTex}
+            loadedMesh.texIndex = 2
+        else print(issue) end
     else
         modelFile = "default-cube-fallback"
         loadedMesh.vert, loadedMesh.uvs, loadedMesh.vInd, loadedMesh.uInd = getMeshFromString(nil, defaultCubeOBJ, false)
@@ -618,6 +630,8 @@ end
 local function uvSampleTexture(u, v, texIndex)
     local texWidth = loadedTextures[texIndex].w
     local texHeight = loadedTextures[texIndex].h
+    u, v = v, u
+    u = 1 - u
     u = ((u * texWidth) + 1) // 1
     v = ((v * texHeight) + 1) // 1
     u = min(max(u, 1), texWidth)
@@ -1045,7 +1059,7 @@ local function rasterizeMesh()
                 pClipped[n][1][3][2] = pClipped[n][1][3][2] * halfHeight
 
                 -- Copy texture over
-                pClipped[n][3] = 1 -- TODO: TEMP, store texture indices in loadedMesh
+                pClipped[n][3] = loadedMesh.texIndex -- TODO: TEMP, store texture indices in loadedMesh
                 pClipped[n][4] = tColor
                 pClipped[n][5] = lightDp
 

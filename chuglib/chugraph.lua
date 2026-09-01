@@ -645,7 +645,8 @@ end
 -- Testing: https://onecompiler.com/lua/44z92yjhe
 local function GetShadedColor(color, shade)
 
-    -- Extract RGB channels, get channel values from 0-1
+    -- Extract RGB channels, get channel values from 1-255
+    -- shade = shade
     local r = (color >> 16) * shade
     local g = ((color % 65536) >> 8) * shade
     local b = (color % 256) * shade

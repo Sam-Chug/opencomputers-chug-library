@@ -76,7 +76,9 @@ local function ParseBMP(fileName)
     -- TODO: This uses a lot of memory I'm guessing
 
     -- TODO: Send back error if file doesn't exist
-    if not fileExists(fileName) then return false end
+    if not fileExists(fileName) then
+        return false, "File doesn't exist"
+    end
 
     local file = io.open(fileName, "rb")
     local bmpData = file:read("*a")
@@ -84,13 +86,13 @@ local function ParseBMP(fileName)
     -- TODO: Send back error if magic header not found
     if readShort(bmpData, bmpOffsetHeader) ~= 0x4D42 then
         file:close()
-        return false
+        return false, "Mising BM header"
     end
 
     -- TODO: Send back error if magic header not found
     if readLong(bmpData, bmpOffsetCompression) ~= 0 then
         file:close()
-        return false
+        return false, "Texture cannot have compression"
     end
 
     local bpp = readShort(bmpData, bmpOffsetBpp)
@@ -99,7 +101,7 @@ local function ParseBMP(fileName)
     -- TODO: Send back error if file not in required bpp
     if bpp ~= 24 and bpp ~= 32 then
         file:close()
-        return false
+        return false, "Not 24bpp or 32bpp"
     end
 
     local width = readLong(bmpData, bmpOffsetWidth)
@@ -140,10 +142,9 @@ local function main()
 
     gpu.ClearScreen()
     computer.beep(1000, 0.1)
-    gpu.SetText(5, 5, "ChugBMP", 0xFFFFFF, 0x000000, false)
     gpu.UpdateScreen()
 
-    local test = ParseBMP("parrot.bmp")
+    local test, issue = ParseBMP("ship.bmp")
     while true do
         gpu.ClearScreen()
         local tEvent = table.pack(event.pull(0))
@@ -158,6 +159,7 @@ local function main()
         if not test then
             gpu.ResetToCommandLine()
             package.loaded["chugraph"] = nil
+            print(issue)
             break
         end
 
@@ -170,4 +172,9 @@ local function main()
         gpu.UpdateScreen()
     end
 end
-main()
+
+if ops.d then main() end
+
+return {
+    ParseBMP = ParseBMP
+}

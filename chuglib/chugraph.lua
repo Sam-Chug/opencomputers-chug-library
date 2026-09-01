@@ -574,13 +574,13 @@ end
 -- COLOR
 -- ============================================================
 
+-- TODO: There's a lot of mess in this section
+-- Untangle this crap
+
 -- Return nearest valid hex color from input RGB values (0 - 1)
 local function ValidHexFromRGB(r, g, b)
-    -- Experiment with crushing the palette a bit, to save on swapping fore and background colors.
-    -- Greens can be cut in half without much color loss
     r = (r // 0.17) * 51
     g = ((g // 0.125) * 36.5) // 1
-    -- g = Min(((g // 0.25) * 73) // 1, 255)
     b = Min((b // 0.25) * 64, 255)
     return (r << 16) + (g << 8) + b
 end
@@ -653,8 +653,10 @@ local function BlendColor(c1, c2, amount)
     local bNew = b1 + (bDiff * blend)
     return ValidHexFromRGB(rNew, gNew, bNew)
 
-    -- If we want a truer blend, enable returning grays here.
-    -- Even if a grayscale color may be closer, they usually look out of place, so this is disabled for now.
+    -- This is a flawed approach to getting the closest color/greyscale value
+    -- We need to get the average distance of each 3 "fixed" channels, ->
+    -- then find which color closest matches the real color
+
     -- local realRGB = ((rNew * 255 // 1) << 16) + ((gNew * 255 // 1) << 8) + (bNew * 255 // 1)
     -- local greyRGB = GetGreyscaleColor((rNew + gNew + bNew) / 3)
     -- local hexRGB = ValidHexFromRGB(rNew, gNew, bNew)

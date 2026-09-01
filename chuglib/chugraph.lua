@@ -41,7 +41,7 @@ local gpuUsageStats = {
 }
 
 local TableInsert, Concat = table.insert, table.concat
-local Sub, GetByte, StringFormat = string.sub, string.byte, string.format
+local Sub, StringFormat = string.sub, string.format
 local Modulo, Abs, Min, Max = math.fmod, math.abs, math.min, math.max
 local GPUAllocateBuffer, GPUSetActiveBuffer, GPUFreeBuffer, GPUFreeAllBuffers
 local GPUGetRes, GPUSetFG, GPUSetBG
@@ -63,24 +63,6 @@ local function packPixel(x, y, fore, back, char, update)
     colorBuffer[index] = (fore << 24) + (back or 0x000000)
     charBuffer[index] = char
     drawBuffer[index] = update
-end
-
-local function getPixelChar(x, y)
-    return charBuffer[y * funcWidth + x]
-end
-
--- Return last byte in packed string, the update byte
-local function getPixelUpdateState(x, y)
-    return drawBuffer[y * funcWidth + x]
-end
-
--- Return color value from packed string, first three bytes
-local function getPixelForeColor(x, y)
-    return colorBuffer[y * funcWidth + x] >> 24
-end
-
-local function getPixelBackColor(x, y)
-    return colorBuffer[y * funcWidth + x] % 16777216
 end
 
 -- Set empty screen buffer
@@ -109,6 +91,7 @@ end
 -- GPU DRAWING
 -- ============================================================
 
+-- Blit VRAM to main screen
 local function bitblt()
     GPUBitBlt(0, 1, 1, screenWidth, screenHeight, buffer, 1, 1)
     gpuUsageStats.blit = gpuUsageStats.blit + 1
@@ -166,10 +149,10 @@ local function returnPixelData(x, y)
         local downFore = colorBuffer[(y + 1) * funcWidth + x] >> 24
 
         if fore == downFore then
-            -- same color, send full block
+            -- Same color, send full block
             return fore, downFore, charBlockF, false
         else
-            -- different color, send half block
+            -- Different color, send half block
             return fore, downFore, charBlockT, false
         end
     -- Else, return char with pixel data
@@ -200,10 +183,6 @@ local function DrawFrame()
             if drawBuffer[indexTop] then goto startGroup
             elseif not drawBuffer[indexBot] then goto continue end
 
-            -- Fore is the color of the first pixel put to the screen, (favor top-most pixel?)
-            -- Back is the background of the first pixel put to the screen
-            -- If initially the same, set back to the first available second
-
             -- Mark pixel as finished updating
             ::startGroup::
             drawBuffer[indexTop] = false
@@ -216,6 +195,9 @@ local function DrawFrame()
             fillGroup = {x + xSkipIndex, (y // yInc) + 1, startFore, startBack}
             charString = {startChar}; charsAdded = 1; twoColCheck = false
             while true do -- loop until non-matching pixel found
+
+                -- If no update needed, move on to next group
+                if not drawBuffer[indexTop + 1] and not drawBuffer[indexBot + 1] then break end
 
                 -- Get next pixel in row
                 checkLen = charsAdded
@@ -395,7 +377,6 @@ local function ClearScreen()
 end
 
 -- Return pixel data
--- TODO: This probably doesn't work after changing how chars are stored
 local function GetPixel(x, y)
     local fore, back, char = unpackPixel(x, y)
     return char or nil, fore, back
@@ -437,9 +418,6 @@ end
 -- ============================================================
 -- COLOR
 -- ============================================================
-
--- TODO: There's a lot of mess in this section
--- Untangle this crap
 
 -- Return closest valid color from RGB values ranging from 0-255
 local function ClosestValidHexFromRGB8(r, g, b)
@@ -585,6 +563,7 @@ end
 -- MATH
 -- ============================================================
 
+-- DrawLine helper function
 local function drawLineLow(x1, y1, x2, y2, color)
 
     local dx = x2 - x1
@@ -608,6 +587,7 @@ local function drawLineLow(x1, y1, x2, y2, color)
     end
 end
 
+-- DrawLine helper function
 local function drawLineHigh(x1, y1, x2, y2, color)
 
     local dx = x2 - x1
@@ -654,6 +634,7 @@ local function DrawTriangle(p, color)
     DrawLine(p[3][1], p[3][2], p[1][1], p[1][2], color)
 end
 
+-- FillTriangle helper function
 local function fillFlatBottomTriangle(x1, y1, x2, y2, x3, y3, color)
     local invSlope1 = (x2 - x1) / (y2 - y1)
     local invSlope2 = (x3 - x1) / (y3 - y1)
@@ -667,6 +648,7 @@ local function fillFlatBottomTriangle(x1, y1, x2, y2, x3, y3, color)
     end
 end
 
+-- FillTriangle helper function
 local function fillFlatTopTriangle(x1, y1, x2, y2, x3, y3, color)
     local invSlope1 = (x3 - x1) / (y3 - y1)
     local invSlope2 = (x3 - x2) / (y3 - y2)
@@ -680,10 +662,6 @@ local function fillFlatTopTriangle(x1, y1, x2, y2, x3, y3, color)
         xEnd = xEnd - invSlope2
     end
 end
-
--- FillTriangle sources:
--- https://mclark45.medium.com/scanline-based-triangle-filling-harnessing-flat-bottom-and-flat-top-configurations-00d2994da20f
--- https://www.sunshine2k.de/coding/java/TriangleRasterization/TriangleRasterization.html
 
 -- Fill triangle specified by input point set and color
 local function FillTriangle(tri, color)
@@ -734,10 +712,8 @@ local debugTimeCycles = 2; local debugCycleReset = 50
 local debugForeColor = 0xFFFFFF; local debugBackColor = 0x330040
 
 local function getGPUUsage()
-    -- Values were determined using a loop, increasing values until fps was sub-20
-    -- Set = 2200 | SetFG = 2000 | SetBG = 2000 | Fill = 1400 | Get = 2000
-    -- These values do not take into account the weight of BitBlt, whose impact I do not understand as of yet
-    -- This is largely speculative and likely very wrong but they do give a decent approximation of the GPU call allowance
+    -- These values were tested using an empty debug screen, and pushing until frames dropped below 20fps average.
+    -- They do not reflect the real gpu call budget, but are a good measurement of chugraph
     return gpuUsageStats.lastSet  / 2200 +
            gpuUsageStats.lastFill / 1400 +
            gpuUsageStats.lastFore / 2000 +
@@ -749,7 +725,6 @@ end
 local function drawDebug()
 
     -- Timing Test Bench: https://onecompiler.com/lua/44zp873h2
-    -- Log cpu usage time and the time since last frame shown (50ms is optimal)
     local averageCpuTime = gpuUsageStats.cpuTimeTotal / debugTimeCycles
     local averageFrameTime = gpuUsageStats.frameTimeTotal // debugTimeCycles
     local averageUsedMem = gpuUsageStats.usedMemTotal // debugTimeCycles
@@ -787,8 +762,8 @@ local function drawDebug()
         SetText(1, posY, debugLines[i], debugForeColor, debugBackColor, false)
     end
 
-    -- To quick-average the times displayed, we tally up previous times and then divide them by the amount of times added
-    -- It's not the best way to do this, but it is accurate enough to get a decent readout without imposing too much overhead
+    -- Average up to n time cycles, reset average afterwards
+    -- Not the most accurate "average", but close enough
     debugTimeCycles = debugTimeCycles + 1
     if debugTimeCycles > debugCycleReset then
         gpuUsageStats.cpuTimeTotal = averageCpuTime
@@ -833,7 +808,6 @@ end
 local function UpdateScreen()
     if debugMode then drawDebug() end
     DrawFrame()
-    -- NewDrawFrame()
     bitblt()
     takeDebugMeasurements()
 end
@@ -882,25 +856,21 @@ local function drawDemoGraphics(x, y, width, height)
     -- Draw 350 random white lines
     if debugDrawWhiteLines then
         for i = 1, 50 do
-            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
-            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
-            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
-            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
-            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
-            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
-            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
+            for j = 1, 7 do
+                DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
+            end
         end
     end
 
     -- Draw 350 random colored lines
     if debugDrawColorLines then
         for i = 1, 50 do
-            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFF0000)
-            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0x00FF00)
             DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0x0000FF)
-            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFF00)
+            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0x00FF00)
             DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0x00FFFF)
+            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFF0000)
             DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFF00FF)
+            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFF00)
             DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
         end
     end
@@ -953,7 +923,7 @@ local function ResetToCommandLine()
 end
 
 -- Set main GPU and settings for Chugraph
-local function SetMainGPU(g, resMode, useBuffer, enableDebug)
+local function SetMainGPU(g, _, useBuffer, enableDebug)
 
     gpu = g
     GPUAllocateBuffer = gpu.allocateBuffer

@@ -47,38 +47,33 @@ local function fileExists(fileName)
     return false
 end
 
-local function closestValidHexFromRGB(r, g, b)
+local function closestValidHexFromRGB8(r, g, b)
 
     -- Get value of each channel from 0-1
     local valR = r / 255
     local valG = g / 255
     local valB = b / 255
-    local valGrey = (r + g + b) / 3
+    local valGrey = (valR + valG + valB) / 3
 
     -- Re-inflate values from 0-255, in valid OC increments
     local fixedR = (valR // 0.17) * 51
-    local fixedG = ((valG // 0.125) * 36.5) // 1
-    local fixedB = math.min((valB // 0.25) * 64, 255)
+    local fixedG = math.min(((valG // 0.125) * 36.5) // 1, 255)
+    local fixedB = math.min((valB // 0.2) * 64, 255)
     local fixedGrey = (valGrey * 16 // 1) * 15
 
     -- Get difference of each fixed channel to the origin channels, and the average distance
-    local realDiffR = math.abs(fixedR - r)
-    local realDiffG = math.abs(fixedG - g)
-    local realDiffB = math.abs(fixedB - b)
-    local realDiffAVG = (realDiffR + realDiffG + realDiffB) / 3
-
     -- Do the same for grey, to check if a greyscale value may be closer
-    local greyDiffR = math.abs(fixedGrey - r)
-    local greyDiffG = math.abs(fixedGrey - g)
-    local greyDiffB = math.abs(fixedGrey - b)
-    local greyDiffAVG = (greyDiffR + greyDiffG + greyDiffB) / 3
+    local realDiffAVG = (math.abs(fixedR - r) + math.abs(fixedG - g) + math.abs(fixedB - b)) / 3
+    local greyDiffAVG = (math.abs(fixedGrey - r) + math.abs(fixedGrey - g) + math.abs(fixedGrey - b)) / 3
 
     -- Return whichever color is closer
-    if realDiffAVG <= greyDiffAVG then return (fixedR << 16) + (fixedG << 8) + fixedB
-    else return (fixedGrey << 16) + (fixedGrey << 8) + fixedB end
+    if realDiffAVG < greyDiffAVG then return (fixedR << 16) + (fixedG << 8) + fixedB
+    else return (fixedGrey << 16) + (fixedGrey << 8) + fixedGrey end
 end
 
 local function ParseBMP(fileName)
+
+    -- TODO: This uses a lot of memory I'm guessing
 
     -- TODO: Send back error if file doesn't exist
     if not fileExists(fileName) then return false end
@@ -114,15 +109,18 @@ local function ParseBMP(fileName)
     local rowLength = width * Bpp
     local rowStride = math.ceil(rowLength / 4) * 4
     local colorMap = {}
+
+    local r, g, b, index, color = 0, 0, 0, 0, 0
     for x = 0, width - 1 do
         colorMap[x + 1] = {}
         for y = 0, height - 1 do
-            local index = (pixelOffset + y * rowStride + x * Bpp) + 1
-            local b = readByte(bmpData, index)
-            local g = readByte(bmpData, index + 1)
-            local r = readByte(bmpData, index + 2)
+            index = (pixelOffset + y * rowStride + x * Bpp) + 1
 
-            local color = closestValidHexFromRGB(r, g, b)
+            b = readByte(bmpData, index)
+            g = readByte(bmpData, index + 1)
+            r = readByte(bmpData, index + 2)
+
+            color = closestValidHexFromRGB8(r, g, b)
             colorMap[x + 1][height - y] = color
         end
     end
@@ -165,7 +163,7 @@ local function main()
 
         for x = 1, #test do
             for y = 1, #test[1] do
-                gpu.SetPixel(x, y, test[x][y])
+                gpu.SetPixel(x + 30, y, test[x][y])
             end
         end
 

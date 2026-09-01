@@ -29,13 +29,13 @@ local inputManager = require("chugkey")
 local doModelRotate, doModelRotateX, doModelRotateZ, doModelRotateY = false, false, false, false
 
 -- Rendering styles
-local drawNormalColor = false
-local drawDepthBuffer = false
-local drawShaded = false
-local doDrawTextured = true
-local drawFlatShade = false
-local drawWireFrame = false
-local drawDepthBlend = false
+local doDrawTextured = true             -- TODO: There is no real setting for this
+local drawNormalColor = false           -- Flat-fill triangle with the RGB color of its face normal XYZ
+local drawDepthBuffer = false           -- Draw depth value at each pixel of each triangle
+local drawShaded = false                -- Shade based on triangle face normal relation to light direction
+local drawFlatShade = false             -- Draw greyscale flat-filled triangle with lighting based on light direction
+local drawWireFrame = false             -- Draw wireframe of mesh
+local drawDepthBlend = false            -- Blend the render into the background using depth buffer values
 
 -- Rendering fluff
 local backgroundColor = 0x00DBFF       -- Color of the background in the scene
@@ -48,11 +48,6 @@ local fNear = 0.25                     -- Near plane distance
 local fFar = 1000                      -- Far plane distance
 local fFov = 90                        -- Field of view
 local modelFile = "teapot.obj"         -- Default loaded model, pretty much just for debugging
-
--- "Cheats" -> These methods can increase rendering speeds a lot, but with some sacrifice to visual fidelity
--- No longer implemented, but may be re-introduced under a toggleable setting
-local bfcLazyThreshold = 0.8           -- Lazy backface culling threshold. Faces turned this far away should be lazy occluded
-local minRastArea = 0.1                -- Any triangle with an area below this value will not be drawn
 
 local function setArguments()
     -- load model from input filename
@@ -154,7 +149,7 @@ local function getMeshFromString(filename, meshData, loadFile)
         for line in io.lines(filename) do
             TInsert(lines, line)
         end
-    else 
+    else
         lines = meshData
     end
 
@@ -1076,7 +1071,7 @@ local function rasterizeMesh()
                 pClipped[n][1][3][2] = pClipped[n][1][3][2] * halfHeight
 
                 -- Copy texture over
-                pClipped[n][3] = loadedMesh.texIndex -- TODO: TEMP, store texture indices in loadedMesh
+                pClipped[n][3] = loadedMesh.texIndex
                 pClipped[n][4] = tColor
                 pClipped[n][5] = lightDp
 
@@ -1111,7 +1106,6 @@ local function modelDebug()
     SetText(1, 5, string.format("DRAWN: %d", trisDrawnLast), debugFG, debugBG, false)
     SetText(1, 7, string.format("Proj: %0.1fms", (projAverage) * 1000), debugFG, debugBG, false)
     SetText(1, 9, string.format("Rast: %0.1fms", (rastAverage) * 1000), debugFG, debugBG, false)
-    SetText(1, 11, string.format("SEG: %1.1fms", (segAverage) * 1000), debugFG, debugBG, false)
 
     segmentCumulative = 0
     projCumulative = 0
@@ -1168,9 +1162,8 @@ local function applyInputControls()
     if inputManager.isKeyDown(inputManager, KEY_TURNRIGHT) then
         fYaw = fYaw + (2 * elapsedTime)
     end
-    -- TODO: This changes the speed of translation
     if inputManager.isKeyDown(inputManager, KEY_TURNUP) then
-        fPitch = fPitch - (2 * elapsedTime)
+        fPitch = fPitch - (2 * elapsedTime) -- TODO: These change the speed of translation
     end
     if inputManager.isKeyDown(inputManager, KEY_TURNDOWN) then
         fPitch = fPitch + (2 * elapsedTime)
@@ -1193,11 +1186,12 @@ local function main()
     gpu.SetSceneBackground(backgroundColor)
 
     -- Force garbage collection before starting
-    for i = 1, 10 do
-        os.sleep(0)
-    end
+    for i = 1, 10 do os.sleep(0) end
 
     while true do
+
+        -- Take player's input controls (yielding)
+        inputManager.updateKeypress(inputManager)
 
         -- Update elapsed time
         updateElapsedTime()
@@ -1207,6 +1201,7 @@ local function main()
             gpu.ResetToCommandLine()
             package.loaded["chugraph"] = nil
             package.loaded["chugkey"] = nil
+            package.loaded["chugbmp"] = nil
             break
         end
 
@@ -1220,9 +1215,7 @@ local function main()
         -- Reset debug values
         trisDrawnLast = 0
 
-        -- Take player's input controls
-        -- This is last as it needs to yield
-        inputManager.updateKeypress(inputManager)
+        
     end
 end
 main()

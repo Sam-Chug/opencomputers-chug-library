@@ -144,9 +144,16 @@ end
 -- Compile char string and draw it at position
 local function drawCharGroup(drawGroups)
     for rKey, rVal in pairs(drawGroups) do
+        gpu.setForeground(rKey)
+        currentForeground = rKey
+        gpuUsageStats.fore = gpuUsageStats.fore + 1
         for cKey, cVal in pairs(rVal) do
+            gpu.setBackground(cKey)
+            currentBackground = cKey
+            gpuUsageStats.back = gpuUsageStats.back + 1
             for i = 1, #cVal[1] do
-                set(cVal[1][i], cVal[2][i], rKey, cKey, cVal[3][i])
+                gpu.set(cVal[1][i], cVal[2][i], cVal[3][i])
+                gpuUsageStats.set = gpuUsageStats.set + 1
             end
         end
     end

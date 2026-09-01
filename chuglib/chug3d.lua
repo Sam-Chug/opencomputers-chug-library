@@ -1006,15 +1006,32 @@ local function rasterizeMesh()
             local tColor = 0x000000
             if drawNormalColor then tColor = getColorFromNormal(normal) end
 
-            -- Clip triangles against near plane
-            nPClipped, pClipped[1], pClipped[2] = triClipPlane(nearDP, nearNormal, {
-                {loadedMesh.vsVert[loadedMesh.vInd[i][1]],
-                 loadedMesh.vsVert[loadedMesh.vInd[i][2]],
-                 loadedMesh.vsVert[loadedMesh.vInd[i][3]]},
-                {table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.uInd[i][1]])),
-                 table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.uInd[i][2]])),
-                 table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.uInd[i][3]]))}
-            })
+            -- Check if triangle needs to be near-plane clipped
+            if loadedMesh.vsVert[loadedMesh.vInd[i][1]][3] < fNear or
+               loadedMesh.vsVert[loadedMesh.vInd[i][2]][3] < fNear or
+               loadedMesh.vsVert[loadedMesh.vInd[i][3]][3] < fNear then
+
+                -- If so, clip it
+                nPClipped, pClipped[1], pClipped[2] = triClipPlane(nearDP, nearNormal, {
+                    {loadedMesh.vsVert[loadedMesh.vInd[i][1]],
+                     loadedMesh.vsVert[loadedMesh.vInd[i][2]],
+                     loadedMesh.vsVert[loadedMesh.vInd[i][3]]},
+                    {table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.uInd[i][1]])),
+                     table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.uInd[i][2]])),
+                     table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.uInd[i][3]]))}
+                })
+            else
+                -- Otherwise, skip clip
+                nPClipped = 1
+                pClipped[1] = {
+                    {loadedMesh.vsVert[loadedMesh.vInd[i][1]],
+                     loadedMesh.vsVert[loadedMesh.vInd[i][2]],
+                     loadedMesh.vsVert[loadedMesh.vInd[i][3]]},
+                    {table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.uInd[i][1]])),
+                     table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.uInd[i][2]])),
+                     table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.uInd[i][3]]))}
+                }
+            end
 
             projCumulative = projCumulative + (GetCPUTime() - projectionStart) -- Timing point end
             for n = 1, nPClipped do

@@ -144,7 +144,7 @@ local function main()
     computer.beep(1000, 0.1)
     gpu.UpdateScreen()
 
-    local test, issue = ParseBMP("ship.bmp")
+    local test, issue = ParseBMP("parrot.bmp")
     while true do
         gpu.ClearScreen()
         local tEvent = table.pack(event.pull(0))

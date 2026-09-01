@@ -135,6 +135,9 @@ end
 local gpu = require("chugraph")
 gpu.SetMainGPU(component.gpu, "doubleHeight", true, true)
 
+-- Benchmarking for image parrot.bmp
+-- Minimum memory required to load: 960kb
+
 local function main()
 
     gpu.ClearScreen()

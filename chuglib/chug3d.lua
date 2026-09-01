@@ -1168,11 +1168,9 @@ local function main()
 
     while true do
 
-        -- update elapsed time
+        -- Update elapsed time
         updateElapsedTime()
 
-        -- Take player's input controls
-        inputManager.updateKeypress(inputManager)
         local exit = applyInputControls()
         if exit then
             gpu.ResetToCommandLine()
@@ -1190,6 +1188,10 @@ local function main()
 
         -- Reset debug values
         trisDrawnLast = 0
+
+        -- Take player's input controls
+        -- This is last as it needs to yield
+        inputManager.updateKeypress(inputManager)
     end
 end
 main()

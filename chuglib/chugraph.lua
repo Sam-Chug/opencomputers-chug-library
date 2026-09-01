@@ -1006,6 +1006,7 @@ return {
     GetScreenHeight = GetScreenHeight,
 
     ClosestValidHexFromRGB8 = ClosestValidHexFromRGB8,
+    ClosestValidHexFromRGB1 = ClosestValidHexFromRGB1,
     GetGreyscaleColor = GetGreyscaleColor,
     GetShadedColor = GetShadedColor,
     BlendColor = BlendColor,

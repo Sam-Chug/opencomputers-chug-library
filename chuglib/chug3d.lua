@@ -84,13 +84,14 @@ setArguments()
 -- ============================================================
 
 local cos, sin, tan = math.cos, math.sin, math.tan
-local min, max, abs = math.min, math.max, math.abs
+local min, max, abs, modulo = math.min, math.max, math.abs, math.fmod
 local GetCPUTime = os.clock
 
 local ClearScreen, UpdateScreen = gpu.ClearScreen, gpu.UpdateScreen
 local SetText, SetPixel = gpu.SetText, gpu.SetPixel
 local DrawTriangle = gpu.DrawTriangle
 local GetGreyscaleColor, GetShadedColor, BlendColor = gpu.GetGreyscaleColor, gpu.GetShadedColor, gpu.BlendColor
+local ColorFromRGB1 = gpu.ClosestValidHexFromRGB1
 
 local TInsert = table.insert; local TRemove = table.remove
 
@@ -436,15 +437,7 @@ end
 
 -- Get matrix translated to values x, y, z
 local function mMakeTranslation(x, y, z)
-    local matrix = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
-    matrix[1][1] = 1
-    matrix[2][2] = 1
-    matrix[3][3] = 1
-    matrix[4][4] = 1
-    matrix[4][1] = x
-    matrix[4][2] = y
-    matrix[4][3] = z
-    return matrix
+    return {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {x, y, z, 1}}
 end
 
 -- Create projection matrix from input FOV, aspect ratio, near and far distance
@@ -519,12 +512,6 @@ local trisDrawnLast = 0
 local elapsedTime = 0.1
 local timeLast, nowTime = computer.uptime(), computer.uptime()
 
--- Near plane and viewspace offset
-local nearPlane, nearNormal, vsOffset = {0, 0, fNear}, {0, 0, 1}, {1, 1, 0}
-
--- Reusable dot products
-local vsLeftDP, vsRightDP, vsTopDP, vsBottomDP, nearDP
-
 -- Get elapsed time per-frame for mesh rotation, if needed
 local function updateElapsedTime()
     nowTime = computer.uptime()
@@ -532,8 +519,13 @@ local function updateElapsedTime()
     timeLast = nowTime
 end
 
+-- Near plane and viewspace offset
+local nearPlane, nearNormal, vsOffset = {0, 0, fNear}, {0, 0, 1}, {1, 1, 0}
+
+-- Reusable dot products
+local vsLeftDP, vsRightDP, vsTopDP, vsBottomDP, nearDP
+
 -- Load mesh from file and prepare it for rendering
-local textureTest = {}
 local function createMesh()
 
     -- Precalculate some commonly used variables
@@ -557,9 +549,7 @@ local function createMesh()
         triCount = 0, vertCount = 0, texIndex = 1
     }
 
-    -- textureTest = bmp.ParseBMP("parrot.bmp")
-
-    -- TODO: Look for texture with the same name as the loaded mesh and load it as well
+    -- Load model from filename, if bmp exists with the same name, load it as well
     if fileExists(modelFile) then
         loadedMesh.vert, loadedMesh.uvs, loadedMesh.vInd, loadedMesh.uInd = getMeshFromString(modelFile, nil, true)
         local texString = modelFile:gsub(".obj", ".bmp")
@@ -568,6 +558,8 @@ local function createMesh()
             loadedTextures[2] = {name = texString, w = #loadedTex, h = #loadedTex[1], tex = loadedTex}
             loadedMesh.texIndex = 2
         else print(issue) end
+
+    -- If specified model file doesn't exist, use the cube
     else
         modelFile = "default-cube-fallback"
         loadedMesh.vert, loadedMesh.uvs, loadedMesh.vInd, loadedMesh.uInd = getMeshFromString(nil, defaultCubeOBJ, false)
@@ -586,42 +578,31 @@ local function createMesh()
 end
 
 -- ============================================================
--- COLORS & TEXTURES TODO: Move all of this to chugraph
+-- 3D COLORS & TEXTURES
 -- ============================================================
 
--- TODO: Move to chugraph
 -- TODO: Optimize/fix oob errors
 local depthBuffer = {}
 local function resetDepthBuffer()
     depthBuffer = {}
 end
 
--- TODO: Move to chugraph
--- TODO: Redo with barycentric coordinates?
+-- TODO: Redo with barycentric coordinates
 local function getUVCoordinateColor(u, v)
     local uColor = ((u * 256) // 1) * 65536
     local vColor = ((v * 256) // 1) * 256
     return min(max(uColor + vColor, 0), 0xFFFFFF)
 end
 
--- TODO: Move to chugraph
 -- Get color from xyz value of face normal
 local function getColorFromNormal(normal)
     -- Offset it for prettier colors
     local fixed = vAdd(vMul(normal, 0.5), {0.5, 0.5, 0.5})
-
-    -- Inflate channel values back to 1-255, rounding to nearest available color index
-    fixed[1] = (fixed[1] // 0.17) * 51
-    fixed[2] = ((fixed[2] // 0.125) * 36.5) // 1
-    fixed[3] = min((fixed[3] // 0.25) * 64, 255)
-
-    -- Recompile into hex color
-    return (fixed[1] << 16) + (fixed[2] << 8) + fixed[3]
+    return ColorFromRGB1(fixed[1], fixed[2], fixed[3])
 end
 
-
--- TODO: Something is wrong here. FIX: u, v = v, u; u = 1 - u
--- TODO: Move to chugraph
+-- Get color of pixel at texture with UV coordinates
+-- TODO: Bilinear filtering?
 local function uvSampleTexture(u, v, texIndex)
     local texWidth = loadedTextures[texIndex].w
     local texHeight = loadedTextures[texIndex].h
@@ -631,11 +612,9 @@ local function uvSampleTexture(u, v, texIndex)
     v = ((v * texHeight) + 1) // 1
     u = min(max(u, 1), texWidth)
     v = min(max(v, 1), texHeight)
-    if u > texWidth or u < 1 or v > texHeight or v < 1 then return 0xFFFFFF end
     return loadedTextures[texIndex].tex[v][u]
 end
 
--- TODO: Move to chugraph
 -- Draw triangle based on cl args
 local function drawTexturedTriangle(x, y, tri, texU, texV, texW)
     -- TODO: More of these should be combinable
@@ -1214,8 +1193,6 @@ local function main()
 
         -- Reset debug values
         trisDrawnLast = 0
-
-        
     end
 end
 main()

@@ -11,12 +11,12 @@ local version = "0.1.0a"
 -- It has been shortened and likely made more finicky to run. But it creates a lot less garbage.
 -- ============================================================
 
-local offsetHeader = 54
-local offsetWidth = 19
-local offsetHeight = 23
-local offsetBpp = 29 -- Only support 24-32bpp
-local offsetPixel = 11
-local offsetCompression = 31 -- No compression allowed, sorry
+local bmpOffsetHeader = 1
+local bmpOffsetPixel = 11
+local bmpOffsetWidth = 19
+local bmpOffsetHeight = 23
+local bmpOffsetBpp = 29             -- Only support 24-32bpp
+local bmpOffsetCompression = 31     -- No compression allowed, sorry
 
 local function readByte(bytes, offset)
     return string.byte(bytes, offset, offset)
@@ -56,9 +56,9 @@ local function closestValidHexFromRGB(r, g, b)
     local valGrey = (r + g + b) / 3
 
     -- Re-inflate values from 0-255, in valid OC increments
-    local fixedR = (r // 0.17) * 51
-    local fixedG = ((g // 0.125) * 36.5) // 1
-    local fixedB = math.min((b // 0.25) * 64, 255)
+    local fixedR = (valR // 0.17) * 51
+    local fixedG = ((valG // 0.125) * 36.5) // 1
+    local fixedB = math.min((valB // 0.25) * 64, 255)
     local fixedGrey = (valGrey * 16 // 1) * 15
 
     -- Get difference of each fixed channel to the origin channels, and the average distance
@@ -84,21 +84,21 @@ local function ParseBMP(fileName)
     if not fileExists(fileName) then return false end
 
     local file = io.open(fileName, "rb")
-    local infoHeader = file:read(offsetHeader)
+    local bmpData = file:read("*a")
 
     -- TODO: Send back error if magic header not found
-    if readShort(infoHeader, 1) ~= 0x4D42 then
+    if readShort(bmpData, bmpOffsetHeader) ~= 0x4D42 then
         file:close()
         return false
     end
 
     -- TODO: Send back error if magic header not found
-    if readLong(infoHeader, offsetCompression) ~= 0 then
+    if readLong(bmpData, bmpOffsetCompression) ~= 0 then
         file:close()
         return false
     end
 
-    local bpp = readShort(infoHeader, offsetBpp)
+    local bpp = readShort(bmpData, bmpOffsetBpp)
     local Bpp = bpp / 8 -- Length of color in bytes
 
     -- TODO: Send back error if file not in required bpp
@@ -107,25 +107,23 @@ local function ParseBMP(fileName)
         return false
     end
 
-    local width = readLong(infoHeader, offsetWidth)
-    local height = readLong(infoHeader, offsetHeight)
-    local pixelOffset = readLong(infoHeader, offsetPixel)
+    local width = readLong(bmpData, bmpOffsetWidth)
+    local height = readLong(bmpData, bmpOffsetHeight)
+    local pixelOffset = readLong(bmpData, bmpOffsetPixel)
 
     local rowLength = width * Bpp
     local rowStride = math.ceil(rowLength / 4) * 4
     local colorMap = {}
     for x = 0, width - 1 do
-        colorMap[x] = {}
+        colorMap[x + 1] = {}
         for y = 0, height - 1 do
-            print()
-            print(x, y)
-            local index = pixelOffset + y * rowStride + x * Bpp
-            local b = readByte(infoHeader, index)
-            local g = readByte(infoHeader, index + 1)
-            local r = readByte(infoHeader, index + 2)
+            local index = (pixelOffset + y * rowStride + x * Bpp) + 1
+            local b = readByte(bmpData, index)
+            local g = readByte(bmpData, index + 1)
+            local r = readByte(bmpData, index + 2)
 
             local color = closestValidHexFromRGB(r, g, b)
-            colorMap[x][y] = color
+            colorMap[x + 1][height - y] = color
         end
     end
 
@@ -135,7 +133,7 @@ end
 
 -- Graphics Library
 local gpu = require("chugraph")
-gpu.SetMainGPU(component.gpu, "doubleHeight", false, true)
+gpu.SetMainGPU(component.gpu, "doubleHeight", true, true)
 
 local function main()
 
@@ -155,8 +153,12 @@ local function main()
                 break
             end
         end
-        if not test then break end
-        gpu.SetText(5, 5, test[1][1], 0xFFFFFF, 0x000000, false)
+
+        if not test then
+            gpu.ResetToCommandLine()
+            package.loaded["chugraph"] = nil
+            break
+        end
 
         for x = 1, #test do
             for y = 1, #test[1] do

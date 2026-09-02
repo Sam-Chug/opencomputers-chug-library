@@ -13,7 +13,7 @@ local version = "0.3.1a"
 
 -- Graphics Library
 local gpu = require("chugraph")
-gpu.SetMainGPU(component.gpu, "doubleHeight", false, true)
+gpu.SetMainGPU(component.gpu, "doubleHeight", true, true)
 
 -- BMP Loader
 local bmp = require("chugbmp")

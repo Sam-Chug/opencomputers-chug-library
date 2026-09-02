@@ -11,10 +11,6 @@ local version = "0.1.0a"
 -- It has been shortened and likely made more finicky to run. But it creates a bit less garbage.
 -- ============================================================
 
--- Graphics Library
-local gpu = require("chugraph")
-gpu.SetMainGPU(component.gpu, "doubleHeight", true, true)
-
 local bmpOffsetHeader = 1
 local bmpOffsetPixel = 11
 local bmpOffsetWidth = 19
@@ -139,6 +135,10 @@ end
 -- Minimum memory required to load: 960kb
 
 local function main()
+
+    -- Graphics Library
+    local gpu = require("chugraph")
+    gpu.SetMainGPU(component.gpu, "doubleHeight", true, true)
 
     gpu.ClearScreen()
     computer.beep(1000, 0.1)

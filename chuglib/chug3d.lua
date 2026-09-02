@@ -49,11 +49,11 @@ local fNear = 0.25                      -- Near plane distance
 local fFar = 1000                       -- Far plane distance
 local fFov = 90                         -- Field of view
 local defaultTranslation = {0, 0, 7.5}  -- Translate world by these XYZ values upon startup
-local defaultRotation = {0, 0, 1}       -- Rotate camera by these values upon startup
+local defaultRotation = {0, 0, 1}       -- TODO: Rotate camera by these values upon startup
 local modelFile = "teapot.obj"          -- Default loaded model, pretty much just for debugging
 
 -- TODO: This is getting quite lengthy, it would be nice to read more complex settings from a setup file
-local function setArguments()
+local function setUserOptions()
     -- load model from input filename
     if ops.model ~= nil then
         if string.find(ops.model, ".obj") == nil then
@@ -95,7 +95,7 @@ local function setArguments()
         end
     end
 end
-setArguments()
+setUserOptions()
 
 -- ============================================================
 -- LUA NONSENSE

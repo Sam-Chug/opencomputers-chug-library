@@ -9,7 +9,7 @@ local component = require("component")
 local shell = require("shell")
 local _, ops = shell.parse(...)
 local computer = require("computer")
-local version = "0.3.1a"
+local version = "0.3.2a"
 
 -- Graphics Library
 local gpu = require("chugraph")
@@ -61,11 +61,16 @@ local function setArguments()
         backgroundColor = ops.back + 0
     end
     if ops.offset ~= nil then
-        local xyz = ops.offset:gmatch("%f+")
-        if #xyz == 3 then
-            defaultTranslation[1] = xyz[1]
-            defaultTranslation[3] = xyz[2]
-            defaultTranslation[3] = xyz[3]
+        local points = {}
+        ops.offset = ops.offset:gsub(",", " ")
+        for point in ops.offset:gmatch("%S+") do
+            table.insert(points, tonumber(point))
+        end
+
+        if #points == 3 then
+            defaultTranslation[1] = points[1]
+            defaultTranslation[3] = points[2]
+            defaultTranslation[3] = points[3]
         end
     end
     if ops.n then drawNormalColor = true end

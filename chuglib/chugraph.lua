@@ -946,7 +946,7 @@ end
 -- Show examples of graphical features
 -- TODO: error handling
 local function demoGraphics()
-    SetMainGPU(component.gpu, "doubleHeight", false, true)
+    SetMainGPU(component.gpu, "doubleHeight", true, true)
     ClearScreen()
 
     while true do

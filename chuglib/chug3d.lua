@@ -72,7 +72,7 @@ local function setUserOptions()
 
         if #points == 3 then
             defaultTranslation[1] = points[1]
-            defaultTranslation[3] = points[2]
+            defaultTranslation[2] = points[2]
             defaultTranslation[3] = points[3]
         end
     end

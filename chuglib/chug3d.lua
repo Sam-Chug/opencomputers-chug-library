@@ -36,6 +36,7 @@ local drawShaded = false                -- Shade based on triangle face normal r
 local drawFlatShade = false             -- Draw greyscale flat-filled triangle with lighting based on light direction
 local drawWireFrame = false             -- Draw wireframe of mesh
 local drawDepthBlend = false            -- Blend the render into the background using depth buffer values
+local doUserControl = true              -- Render the scene with/without user control, affects performance greatly
 
 -- Rendering fluff
 local backgroundColor = 0x00DBFF        -- Color of the background in the scene
@@ -48,8 +49,10 @@ local fNear = 0.25                      -- Near plane distance
 local fFar = 1000                       -- Far plane distance
 local fFov = 90                         -- Field of view
 local defaultTranslation = {0, 0, 7.5}  -- Translate world by these XYZ values upon startup
+local defaultRotation = {0, 0, 1}       -- Rotate camera by these values upon startup
 local modelFile = "teapot.obj"          -- Default loaded model, pretty much just for debugging
 
+-- TODO: This is getting quite lengthy, it would be nice to read more complex settings from a setup file
 local function setArguments()
     -- load model from input filename
     if ops.model ~= nil then
@@ -73,6 +76,7 @@ local function setArguments()
             defaultTranslation[3] = points[3]
         end
     end
+    if ops.u then doUserControl = false end
     if ops.n then drawNormalColor = true end
     if ops.d then drawDepthBuffer = true end
     if ops.s then drawShaded = true end
@@ -1206,7 +1210,7 @@ local function main()
         trisDrawnLast = 0
 
         -- Take player's input controls (yielding)
-        inputManager.updateKeypress(inputManager)
+        if doUserControl then inputManager.updateKeypress(inputManager) end
     end
 end
 main()

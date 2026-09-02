@@ -13,7 +13,7 @@ local version = "0.3.1a"
 
 -- Graphics Library
 local gpu = require("chugraph")
-gpu.SetMainGPU(component.gpu, "doubleHeight", true, true)
+gpu.SetMainGPU(component.gpu, "doubleHeight", false, true)
 
 -- BMP Loader
 local bmp = require("chugbmp")
@@ -38,16 +38,17 @@ local drawWireFrame = false             -- Draw wireframe of mesh
 local drawDepthBlend = false            -- Blend the render into the background using depth buffer values
 
 -- Rendering fluff
-local backgroundColor = 0x00DBFF       -- Color of the background in the scene
-local depthFadeDist = 0.4              -- Square depth value by this value when blending colors into the background
-local bfcThreshold = 0.0               -- Cull any face whos dot product against camera normal is above this
-local lightDirection = {0.1, 0.1, -1}  -- [Sunlight-ish](0.3, 1, 0) | [Topdown-ish](0.1, 0.1, -1)
-local shadeMaximum = 5 / 16            -- Maximum darkness in the most shaded areas
-local lightBias = 0.3                  -- Softens faces that are 90 degrees offset to light direction
-local fNear = 0.25                     -- Near plane distance
-local fFar = 1000                      -- Far plane distance
-local fFov = 90                        -- Field of view
-local modelFile = "teapot.obj"         -- Default loaded model, pretty much just for debugging
+local backgroundColor = 0x00DBFF        -- Color of the background in the scene
+local depthFadeDist = 0.4               -- Square depth value by this value when blending colors into the background
+local bfcThreshold = 0.0                -- Cull any face whos dot product against camera normal is above this
+local lightDirection = {0.1, 0.1, -1}   -- [Sunlight-ish](0.3, 1, 0) | [Topdown-ish](0.1, 0.1, -1)
+local shadeMaximum = 5 / 16             -- Maximum darkness in the most shaded areas
+local lightBias = 0.3                   -- Softens faces that are 90 degrees offset to light direction
+local fNear = 0.25                      -- Near plane distance
+local fFar = 1000                       -- Far plane distance
+local fFov = 90                         -- Field of view
+local defaultTranslation = {0, 0, 7.5}  -- Translate world by these XYZ values upon startup
+local modelFile = "teapot.obj"          -- Default loaded model, pretty much just for debugging
 
 local function setArguments()
     -- load model from input filename
@@ -58,6 +59,14 @@ local function setArguments()
     end
     if ops.back ~= nil then
         backgroundColor = ops.back + 0
+    end
+    if ops.offset ~= nil then
+        local xyz = ops.offset:gmatch("%f+")
+        if #xyz == 3 then
+            defaultTranslation[1] = xyz[1]
+            defaultTranslation[3] = xyz[2]
+            defaultTranslation[3] = xyz[3]
+        end
     end
     if ops.n then drawNormalColor = true end
     if ops.d then drawDepthBuffer = true end
@@ -933,7 +942,7 @@ local function rasterizeMesh()
 
     -- Amount to translate model in scene
     -- TODO: This should probably be packed into the loadedMesh table
-    local matTrans = mMakeTranslation(0, 0, 7.5)
+    local matTrans = mMakeTranslation(defaultTranslation[1], defaultTranslation[2], defaultTranslation[3])
 
     -- Build mesh rotation matrix, handles if mesh is rotating
     local matWorld = mMakeIdentity()
@@ -1169,9 +1178,6 @@ local function main()
 
     while true do
 
-        -- Take player's input controls (yielding)
-        inputManager.updateKeypress(inputManager)
-
         -- Update elapsed time
         updateElapsedTime()
 
@@ -1193,6 +1199,9 @@ local function main()
 
         -- Reset debug values
         trisDrawnLast = 0
+
+        -- Take player's input controls (yielding)
+        inputManager.updateKeypress(inputManager)
     end
 end
 main()

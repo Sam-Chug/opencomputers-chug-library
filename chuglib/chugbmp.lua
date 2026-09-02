@@ -11,6 +11,10 @@ local version = "0.1.0a"
 -- It has been shortened and likely made more finicky to run. But it creates a bit less garbage.
 -- ============================================================
 
+-- Graphics Library
+local gpu = require("chugraph")
+gpu.SetMainGPU(component.gpu, "doubleHeight", true, true)
+
 local bmpOffsetHeader = 1
 local bmpOffsetPixel = 11
 local bmpOffsetWidth = 19
@@ -130,10 +134,6 @@ local function ParseBMP(fileName)
     file:close()
     return colorMap
 end
-
--- Graphics Library
-local gpu = require("chugraph")
-gpu.SetMainGPU(component.gpu, "doubleHeight", true, true)
 
 -- Benchmarking for image parrot.bmp
 -- Minimum memory required to load: 960kb

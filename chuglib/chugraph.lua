@@ -196,9 +196,6 @@ local function DrawFrame()
             charString = {startChar}; charsAdded = 1; twoColCheck = false
             while true do -- loop until non-matching pixel found
 
-                -- If no update needed, move on to next group
-                if not drawBuffer[indexTop + 1] and not drawBuffer[indexBot + 1] then break end
-
                 -- Get next pixel in row
                 checkLen = charsAdded
                 if xSkipIndex + x + 1 > funcWidth then break end

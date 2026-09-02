@@ -69,7 +69,7 @@ A fairly quick .obj renderer, as long as the tricount is a tad low
 
 If you thought Chugraph was unreadable, I recommend not taking a peek into the code for Chug3D
 
-The codebase for this originated from a tutorial by Javidx9 on YouTube (https://youtu.be/ih20l3pJoeU), then was optimized (a lot) for a low memory Lua environment.
+The codebase for this originated from a tutorial by Javidx9 on YouTube (https://youtu.be/ih20l3pJoeU), and has since been greatly optimized and rewritten for a low-memory Lua environment.
 
 **Chug3D requires both Chugkey and Chuggraph to run**
 
@@ -84,12 +84,15 @@ At the moment, loading .obj files with some command line arguments is _**all**_ 
 
 **MOVEMENT**
 
-You can translate around the scene using WASD and rotate using arrow keys. That's right folks, Doom is back on the menu.
+You can translate around the scene using WASD and rotate using arrow keys. That's right folks, Doom is back on the menu. You can also exit the program by pressing Q
 
 **COMMAND LINE ARGS**
 | arg | outcome |
 |--------|--|
+| --model=[filename]  | Specifies which .obj file to load. Example: "--model=suzanne" (Loads suzanne.obj in the same folder) |
 | --back=[hexcolor]  | Changes the background of the scene. Example: "--back=0xFF0000" (Red background) |
+| --offset=x,y,z  | Offsets the camera's starting position in the scene. Example: "--offset=0,0.5,-1" (Offsets the camera by 0x, 0.5y, and -1z) |
+| -u  | Disables checking for user input. This check has quite a bit of overhead as we need to yield to parse user inputs, so disabling it can boost framerate a ton. You'll have to reboot the computer to get out of the scene, though. |
 | -n  | Renders the surface normal of each triangle as a color, based on the normal's xyz values |
 | -d  | Renders the depth buffer |
 | -s  | Shades the model based on the surface normal's alignment with the light direction normal (Light direction is facing roughly the same as the camera's starting direction) |
@@ -98,10 +101,14 @@ You can translate around the scene using WASD and rotate using arrow keys. That'
 | -w  | Renders the wireframe over the rasterized triangles |
 | -f  | Grayscale flat shading based on per-triangle light value |
 
+
 **PERFORMANCE**
 
 I am quite proud of how far this project has come performance-wise, its almost 6x faster than when I finished the tutorial the original code was based on. That performance came at the cost of readability though, and I apologize if you were looking towards this code for some form of guidance. I'm not that great of a coder anyways, actually I'm pretty bad.
 
 All things considered, most of the nerfs to readability come from memory optimizations. I love OpenComputers, but why are we sticking such a garbage-producing language into a computer with only 2MB of memory? I mean come on.
 
+## ChugBMP
+This is more of a helper program for Chug3D at the moment. it loads 24-32bpp uncompressed .bmp files to be used as textures for Chug3D.
 
+Run "chugbmp -d" for a fun picture of a parrot. Press Q to exit the program.

@@ -688,10 +688,6 @@ local function drawTexturedTriangle(x, y, tri, texU, texV, texW)
     if drawDepthBuffer then
         SetPixel(x, y, GetGreyscaleColor(texW))
 
-    elseif drawBarycentricShading then
-        local sampleColor = barycentricShade(x, y, tri[1][1], tri[1][2], tri[1][3])
-        SetPixel(x, y, sampleColor)
-
     -- Blend texture color into the background
     elseif drawDepthBlend then
         local sampleColor = uvSampleTexture(texU / texW, texV / texW, tri[3])
@@ -712,6 +708,11 @@ local function drawTexturedTriangle(x, y, tri, texU, texV, texW)
     elseif drawShaded then
         local sampleColor = uvSampleTexture(texU / texW, texV / texW, tri[3])
         SetPixel(x, y, GetShadedColor(sampleColor, tri[5]))
+
+    -- Shade pixel using barycentric coordinates in triangle
+    elseif drawBarycentricShading then
+        local sampleColor = barycentricShade(x, y, tri[1][1], tri[1][2], tri[1][3])
+        SetPixel(x, y, sampleColor)
 
     -- Just texture
     else

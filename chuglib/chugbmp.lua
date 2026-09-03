@@ -1,3 +1,10 @@
+-- ============================================================
+-- CREDITS
+-- This code is looesly inspired by this repo: https://github.com/max1220/lua-bitmap/tree/master
+-- It has been shortened and likely made more finicky to run. But it (might) create a bit less garbage.
+-- Bitmaps must be either 24-32 bpp, and no compression is allowed.
+-- ============================================================
+
 local component = require("component")
 local shell = require("shell")
 local event = require("event")
@@ -5,18 +12,12 @@ local _, ops = shell.parse(...)
 local computer = require("computer")
 local version = "0.1.0a"
 
--- ============================================================
--- CREDITS
--- This code is looesly inspired by this repo: https://github.com/max1220/lua-bitmap/tree/master
--- It has been shortened and likely made more finicky to run. But it creates a bit less garbage.
--- ============================================================
-
 local bmpOffsetHeader = 1
 local bmpOffsetPixel = 11
 local bmpOffsetWidth = 19
 local bmpOffsetHeight = 23
-local bmpOffsetBpp = 29             -- Only support 24-32bpp
-local bmpOffsetCompression = 31     -- No compression allowed, sorry
+local bmpOffsetBpp = 29
+local bmpOffsetCompression = 31
 
 local function readByte(bytes, offset)
     return string.byte(bytes, offset, offset)

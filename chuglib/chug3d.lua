@@ -83,7 +83,7 @@ local GetGreyscaleColor, GetShadedColor, BlendColor = gpu.GetGreyscaleColor, gpu
 local ColorFromRGB1 = gpu.ClosestValidHexFromRGB1
 
 local TInsert = table.insert; local TRemove = table.remove
-local TablePack, TableUnpack, StringPack, StringUnpack = table.pack, table.unpack, string.pack, string.unpack
+local TablePack, TableUnpack, StringPack, StringUnpack, StringFormat = table.pack, table.unpack, string.pack, string.unpack, string.format
 
 -- ============================================================
 -- DEFAULT TEXTURES & MODELS
@@ -1071,7 +1071,7 @@ end
 
 local debugCycles, maxDebugCycles = 1, 30
 local projectionTimeTotal, rasterizeTimeTotal, segmentTimeTotal = 0, 0, 0
-local debugFG, debugBG = 0xFFFFFF, 0x000000
+local debugFG, debugBG = 0xFFFFFF, 0x330040
 
 -- Print debug stats to the screen
 local function modelDebug()
@@ -1082,11 +1082,19 @@ local function modelDebug()
     local rastAverage = rasterizeTimeTotal / debugCycles
     local segAverage = segmentTimeTotal / debugCycles
 
-    SetText(1, 1, modelFile, debugFG, debugBG, false)
-    SetText(1, 3, string.format("T: %3.0d - V: %3.0d", loadedMeshes[1].triCount, loadedMeshes[1].vertCount), debugFG, debugBG, false)
-    SetText(1, 5, string.format("DRAWN: %d", trisDrawnLast), debugFG, debugBG, false)
-    SetText(1, 7, string.format("Proj: %0.1fms", (projAverage) * 1000), debugFG, debugBG, false)
-    SetText(1, 9, string.format("Rast: %0.1fms", (rastAverage) * 1000), debugFG, debugBG, false)
+    local sceneTris, sceneVerts = 0, 0
+    for i = 1, #sceneMeshes do
+        sceneTris = sceneTris + #loadedMeshes[sceneMeshes[i].mesh].vert
+        sceneVerts = sceneVerts + #loadedMeshes[sceneMeshes[i].mesh].vInd
+    end
+
+    gpu.Fill(1, 1, 27, 12, debugBG, debugBG)
+    SetText(1, 1, StringFormat("DEBUG         Chug3D %s", version), debugFG, debugBG, false)
+    SetText(1, 3, StringFormat("Tris: %6.0d | Vert: %6.0d", sceneTris, sceneVerts), debugFG, debugBG, false)
+    SetText(1, 5, StringFormat("Proj: %4.1fms | Rast: %4.1fms", (projAverage) * 1000, (rastAverage) * 1000), debugFG, debugBG, false)
+    SetText(1, 7, StringFormat("Tris Drawn:    %5.0d", trisDrawnLast), debugFG, debugBG, false)
+    SetText(1, 9, StringFormat("Loaded Meshes:  %4.0d", #loadedMeshes), debugFG, debugBG, false)
+    SetText(1, 11, StringFormat("Meshes in Scene: %3.0d", #sceneMeshes), debugFG, debugBG, false)
 
     segmentCumulative = 0
     projCumulative = 0

@@ -486,9 +486,9 @@ local function GetShadedColor(color, shade)
 
     -- Extract RGB channels, get channel values from 1-255
     -- shade = shade
-    local r = (color >> 16) * shade
-    local g = ((color % 65536) >> 8) * shade
-    local b = (color % 256) * shade
+    local r = Min((color >> 16) * shade, 255)
+    local g = Min(((color % 65536) >> 8) * shade, 255)
+    local b = Min((color % 256) * shade, 255)
 
     -- Return closest valid color
     return ClosestValidHexFromRGB8(r, g, b)
@@ -503,17 +503,17 @@ local function BlendColor(c1, c2, amount)
     amount = Max(Min(amount, 1), 0)
 
     -- Isolate RGB values from both colors
-    local r1 = (c1 >> 16) / 255
-    local g1 = ((c1 % 65536) >> 8) / 255
-    local b1 = (c1 % 256) / 255
-    local r2 = (c2 >> 16) / 255
-    local g2 = ((c2 % 65536) >> 8) / 255
-    local b2 = (c2 % 256) / 255
+    local r1 = (c1 >> 16)
+    local g1 = ((c1 % 65536) >> 8)
+    local b1 = (c1 % 256)
+    local r2 = (c2 >> 16)
+    local g2 = ((c2 % 65536) >> 8)
+    local b2 = (c2 % 256)
 
     -- Get difference between each RGB value
-    local rDiff = (r2 - r1) * amount
-    local gDiff = (g2 - g1) * amount
-    local bDiff = (b2 - b1) * amount
+    local rDiff = ((r2 - r1) * amount) // 1
+    local gDiff = ((g2 - g1) * amount) // 1
+    local bDiff = ((b2 - b1) * amount) // 1
 
     -- Get blended RGB values and Grey value
     local rNew = r1 + rDiff
@@ -521,7 +521,7 @@ local function BlendColor(c1, c2, amount)
     local bNew = b1 + bDiff
 
     -- Return closest valid color
-    return ClosestValidHexFromRGB1(rNew, gNew, bNew)
+    return ClosestValidHexFromRGB8(rNew, gNew, bNew)
 end
 
 -- Unused, unless I really feel like saving ram
@@ -705,8 +705,8 @@ local memDiv = 1024 -- Measuring KB
 local memString = "KB"
 
 -- Debug Tracking
-local debugTimeCycles = 2; local debugCycleReset = 50
-local debugForeColor = 0xFFFFFF; local debugBackColor = 0x330040
+local debugTimeCycles, debugCycleReset = 2, 50
+local debugForeColor, debugBackColor = 0xFFFFFF, 0x330040
 
 local function getGPUUsage()
     -- These values were tested using an empty debug screen, and pushing until frames dropped below 20fps average.
@@ -779,8 +779,8 @@ local function takeDebugMeasurements()
     gpuUsageStats.lastPack = gpuUsageStats.pack; gpuUsageStats.lastUnpack = gpuUsageStats.unpack
     gpuUsageStats.lastInvert = gpuUsageStats.invert
 
-    gpuUsageStats.set = 0; gpuUsageStats.fore = 0; gpuUsageStats.back = 0
-    gpuUsageStats.fill = 0; gpuUsageStats.get = 0; gpuUsageStats.blit = 0
+    gpuUsageStats.set = 0;  gpuUsageStats.fore = 0;   gpuUsageStats.back = 0
+    gpuUsageStats.fill = 0; gpuUsageStats.get = 0;    gpuUsageStats.blit = 0
     gpuUsageStats.pack = 0; gpuUsageStats.unpack = 0; gpuUsageStats.invert = 0
 
     gpuUsageStats.lastCpuTime = gpuUsageStats.cpuTime
@@ -822,32 +822,6 @@ local function drawDemoGraphics(x, y, width, height)
     -- Benchmark whatever function needs to be tested
     if debugDoBenchmark then
 
-        -- ~20fps at 1300 set + foreground swap
-        -- for i = 1, 1300 do
-        --     gpu.setForeground(hexLUT[random(1, 255)])
-        --     gpu.set((i % 100) + 1 + (i // 100), (i % 100) // 2, ".", false)
-        -- end
-
-        -- 20fps
-        for i = 1, 800 do
-            gpu.setBackground(hexLUT[random(1, 255)])
-            gpu.setForeground(hexLUT[random(1, 255)])
-            gpu.set((i % 100) + 1 + (i // 100), (i % 100) // 2, ".", false)
-        end
-        GPUBitBlt(0, 1, 1, screenWidth, screenHeight, buffer, 1, 1)
-
-        -- ~20fps at 2200 sets
-        -- gpu.setForeground(hexLUT[random(1, 255)])
-        -- for i = 1, 2200 do
-        --     local x = random(1, screenWidth)
-        --     local y = random(1, screenHeight)
-        --     gpu.set(x, y, ".", false)
-        -- end
-
-        drawDebug()
-        DrawFrame()
-        takeDebugMeasurements()
-        GPUBitBlt(0, 1, 1, screenWidth, screenHeight, buffer, 1, 1)
     end
 
     -- Draw 350 random white lines
@@ -860,15 +834,12 @@ local function drawDemoGraphics(x, y, width, height)
     end
 
     -- Draw 350 random colored lines
+    local colors = {0x0000FF, 0x00FF00, 0x00FFFF, 0xFF0000, 0xFF00FF, 0xFFFF00, 0xFFFFFF}
     if debugDrawColorLines then
         for i = 1, 50 do
-            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0x0000FF)
-            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0x00FF00)
-            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0x00FFFF)
-            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFF0000)
-            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFF00FF)
-            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFF00)
-            DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, 0xFFFFFF)
+            for j = 1, 7 do
+                DrawLine(random(1, width) + x, random(1, height) + y, random(1, width) + x, random(1, height) + y, colors[j])
+            end
         end
     end
 

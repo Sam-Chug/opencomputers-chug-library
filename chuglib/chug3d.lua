@@ -25,9 +25,6 @@ local inputManager = require("chugkey")
 -- RENDER CONFIGS
 -- ============================================================
 
--- Rotation
-local doModelRotate, doModelRotateX, doModelRotateZ, doModelRotateY = false, false, false, false
-
 -- Rendering styles
 local doDrawTextured = true             -- TODO: There is no real setting for this
 local drawNormalColor = false           -- Flat-fill triangle with the RGB color of its face normal XYZ
@@ -61,19 +58,6 @@ local function setUserOptions()
     if ops.back ~= nil then
         backgroundColor = ops.back + 0
     end
-    if ops.offset ~= nil then
-        local points = {}
-        ops.offset = ops.offset:gsub(",", " ")
-        for point in ops.offset:gmatch("%S+") do
-            table.insert(points, tonumber(point))
-        end
-
-        if #points == 3 then
-            defaultTranslation[1] = points[1]
-            defaultTranslation[2] = points[2]
-            defaultTranslation[3] = points[3]
-        end
-    end
     if ops.u then doUserControl = false end
     if ops.n then drawNormalColor = true end
     if ops.d then drawDepthBuffer = true end
@@ -81,17 +65,6 @@ local function setUserOptions()
     if ops.b then drawDepthBlend = true end
     if ops.f then drawFlatShade = true end
     if ops.w then drawWireFrame = true end
-    if ops.r then
-        doModelRotate = true
-        if ops.x then doModelRotateX = true
-        elseif ops.z then doModelRotateZ = true
-        elseif ops.y then doModelRotateY = true
-        else
-            doModelRotateX = true
-            doModelRotateZ = true
-            doModelRotateY = true
-        end
-    end
 end
 setUserOptions()
 

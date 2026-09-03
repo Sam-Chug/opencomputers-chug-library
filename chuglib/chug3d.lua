@@ -569,17 +569,15 @@ local function loadSceneMeshes(meshFilenames)
         else
             modelFile = "default-cube-fallback"
             loadedMeshes[i] = {name = modelFile, vert = {}, uv = {}, vInd = {}, uInd = {}, tex = 1}
-            loadedMeshes[i].vert, loadedMeshes[1].uv, loadedMeshes[1].vInd, loadedMeshes[1].uInd = getMeshFromString(nil, defaultCubeOBJ, false)
+            loadedMeshes[i].vert, loadedMeshes[i].uv, loadedMeshes[i].vInd, loadedMeshes[i].uInd = getMeshFromString(nil, defaultCubeOBJ, false)
         end
 
         -- Get tricount for this mesh
-        loadedMeshes[1].triCount = #loadedMeshes[1].vInd
-        loadedMeshes[1].vertCount = #loadedMeshes[1].vert
+        loadedMeshes[i].triCount = #loadedMeshes[i].vInd
+        loadedMeshes[i].vertCount = #loadedMeshes[i].vert
     end
 
-    -- TODO: End loop, now spawn objects in scene
-
-    -- TODO: For objects to be placed in scene:
+    -- TODO: For objects to be placed in scene, place them into sceneMeshes:
     sceneMeshes[1] = {mesh = 1, parent = nil, children = {}, position = {0, 0, 7.5}, rotation = {0, 0, 0}}
     -- sceneMeshes[2] = {mesh = 1, parent = nil, children = {}, position = {0, 3, 3}, rotation = {0, 0.9, 0}}
     -- sceneMeshes[3] = {mesh = 1, parent = nil, children = {}, position = {0, 6, 3}, rotation = {0, -20, 0}}

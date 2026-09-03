@@ -552,11 +552,10 @@ local trisDrawnLast = 0
 local elapsedTime = 0.1
 local timeLast, nowTime = computer.uptime(), computer.uptime()
 
--- Near plane and viewspace offset
+-- Near plane and viewspace offset, and reusable dot products, and projected/viewspace vert container lists
 local nearPlane, nearNormal, vsOffset = {0, 0, fNear}, {0, 0, 1}, {1, 1, 0}
-
--- Reusable dot products
 local vsLeftDP, vsRightDP, vsTopDP, vsBottomDP, nearDP
+local pVert, vsVert = {}, {}
 
 -- Load mesh from file and prepare it for rendering
 local function loadSceneMeshes(meshFilenames)
@@ -573,6 +572,7 @@ local function loadSceneMeshes(meshFilenames)
     vsTopDP = vDotProduct({0, 0, 0}, {0, 1, 0})
     vsBottomDP = vDotProduct({0, screenHeight, 0}, {0, -1, 0})
     nearDP = vDotProduct(nearPlane, nearNormal)
+    local maximumVert = 0
 
     -- TODO: For meshes in scene:
 
@@ -604,12 +604,19 @@ local function loadSceneMeshes(meshFilenames)
         -- Get tricount for this mesh
         loadedMeshes[i].triCount = #loadedMeshes[i].vInd
         loadedMeshes[i].vertCount = #loadedMeshes[i].vert
+
+        if maximumVert < loadedMeshes[i].vertCount then maximumVert = loadedMeshes[i].vertCount end
     end
 
     -- TODO: For objects to be placed in scene, place them into sceneMeshes:
     sceneMeshes[1] = {mesh = 1, parent = nil, children = {}, position = {0, 0, 7.5}, rotation = {0, 0, 0}}
     -- sceneMeshes[2] = {mesh = 1, parent = nil, children = {}, position = {0, 3, 3}, rotation = {0, 0.9, 0}}
     -- sceneMeshes[3] = {mesh = 1, parent = nil, children = {}, position = {0, 6, 3}, rotation = {0, -20, 0}}
+
+    -- Setup pVert and vsVert
+    for i = 1, maximumVert do
+        pVert[i], vsVert[i] = {0, 0, 0, 1}, {0, 0, 0, 1}
+    end
 end
 
 -- ============================================================
@@ -854,7 +861,6 @@ local function texturedTriangle(p, u, tri)
     end
 end
 
-local rasterizeStart; local rastCumulative = 0
 local testTri, vClipped = {}, {}
 local planeTopN, planeBotN, planeLeftN, planeRightN = {0, 1, 0}, {0, -1, 0}, {1, 0, 0}, {-1, 0, 0}
 
@@ -979,10 +985,7 @@ local function drawSceneMeshes(matView, sceneMesh)
     -- First, project vertices
     local meshRef = loadedMeshes[sceneMesh.mesh]
     local vInd, uInd
-    local pVert = {}
-    local vsVert = {}
     for i = 1, meshRef.vertCount do
-        pVert[i], vsVert[i] = {0, 0, 0, 1}, {0, 0, 0, 1}
         mMultiplyVectorR(pVert[i], matWorld, {StringUnpack(vertPackS, meshRef.vert[i])})
         mMultiplyVectorR(vsVert[i], matView, pVert[i])
     end
@@ -1096,16 +1099,13 @@ end
 -- DEBUG
 -- ============================================================
 
-local debugCycles, maxDebugCycles = 1, 30
-local projTimeTotal, rastTimeTotal = 0, 0
+local debugCycles, maxDebugCycles, projTimeTotal = 1, 30, 0
 local debugFG, debugBG = 0xFFFFFF, 0x330040
 
 -- Print debug stats to the screen
 local function modelDebug()
     projTimeTotal = projTimeTotal + projCumulative
-    rastTimeTotal = rastTimeTotal + rastCumulative
     local projAverage = projTimeTotal / debugCycles
-    local rastAverage = rastTimeTotal / debugCycles
 
     local sceneTris, sceneVerts = 0, 0
     for i = 1, #sceneMeshes do
@@ -1113,21 +1113,19 @@ local function modelDebug()
         sceneVerts = sceneVerts + #loadedMeshes[sceneMeshes[i].mesh].vInd
     end
 
-    gpu.Fill(1, 1, 27, 12, debugBG, debugBG)
+    gpu.Fill(1, 1, 27, 10, debugBG, debugBG)
+    gpu.DrawLine(1, 11, 27, 11, 0xFFFFFF)
     SetText(1, 1, StringFormat("DEBUG         Chug3D %s", version), debugFG, debugBG, false)
-    SetText(1, 3, StringFormat("Tris: %6.0d | Vert: %6.0d", sceneTris, sceneVerts), debugFG, debugBG, false)
-    SetText(1, 5, StringFormat("Render Time: %12.1fms", (projAverage) * 1000), debugFG, debugBG, false)
-    SetText(1, 7, StringFormat("Tris Drawn:    %12.0d", trisDrawnLast), debugFG, debugBG, false)
-    SetText(1, 9, StringFormat("Loaded Meshes:  %11.0d", #loadedMeshes), debugFG, debugBG, false)
-    SetText(1, 11, StringFormat("Meshes in Scene: %10.0d", #sceneMeshes), debugFG, debugBG, false)
+    SetText(1, 3, StringFormat("TRIS: %6.0d | VERT: %6.0d", sceneTris, sceneVerts), debugFG, debugBG, false)
+    SetText(1, 5, StringFormat("REND: %4.1fms | DRWN: %6.0d", (projAverage) * 1000, trisDrawnLast), debugFG, debugBG, false)
+    SetText(1, 7, StringFormat("Loaded Meshes:  %11.0d", #loadedMeshes), debugFG, debugBG, false)
+    SetText(1, 9, StringFormat("Meshes in Scene: %10.0d", #sceneMeshes), debugFG, debugBG, false)
 
     trisDrawnLast = 0
     projCumulative = 0
-    rastCumulative = 0
     debugCycles = debugCycles + 1
     if debugCycles > maxDebugCycles then
         projTimeTotal = projAverage
-        rastTimeTotal = rastAverage
         debugCycles = 2
     end
 end

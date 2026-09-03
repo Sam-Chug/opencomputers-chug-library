@@ -9,7 +9,7 @@ local component = require("component")
 local shell = require("shell")
 local _, ops = shell.parse(...)
 local computer = require("computer")
-local version = "0.4.0a"
+local version = "0.4.1a"
 
 -- Graphics Library
 local gpu = require("chugraph")
@@ -121,12 +121,11 @@ local function fileExists(filename)
     return false
 end
 
-local vertPackS = "fffB"
-local uvPackS = "ffB"
-local indPackS = "I2I2I2"
+local vertPackS = "fffB"    -- Pack verts, 3 floats and a byte for trailing unset "w" value
+local uvPackS = "ffB"       -- Pack uvs, 2 floats and a byte for trailing unset "w" value
+local indPackS = "I2I2I2"   -- Pack unsigned ints, was for vertex and uv indices but is not used at the moment
 
--- Load .obj from file at filenam, parse vertex/face data and build a list of triangles from it
--- Hamfisted to work with both importing a file and a mesh string
+-- Load .obj from file at filename or from string, parse vertex/face data and build a list of triangles from it
 local function getMeshFromString(filename, meshData, loadFile)
     local verts, uvs, vInd, uInd = {}, {}, {}, {}
     local pointData = {}
@@ -152,7 +151,7 @@ local function getMeshFromString(filename, meshData, loadFile)
         if data[1] == "v" then
             TInsert(verts, StringPack(vertPackS, tonumber(data[2]), tonumber(data[3]), tonumber(data[4]), 1))
 
-        -- TODO: Vertex normals, could do shading eventually
+        -- TODO: Vertex normals, could do phong eventually
         elseif data[1] == "vn" then
             -- Do nothing... for now....
 
@@ -180,8 +179,6 @@ local function getMeshFromString(filename, meshData, loadFile)
 
                 TInsert(vInd, {pointData[1], pointData[3], pointData[5]})
                 TInsert(uInd, {pointData[2], pointData[4], pointData[6]})
-                -- TInsert(vInd, StringPack(indPackS, pointData[1], pointData[3], pointData[5]))
-                -- TInsert(uInd, StringPack(indPackS, pointData[2], pointData[4], pointData[6]))
 
             elseif parts == 2 then
                 -- Vertex/UV/Vertex-Normal
@@ -195,15 +192,11 @@ local function getMeshFromString(filename, meshData, loadFile)
 
                 TInsert(vInd, {pointData[1], pointData[4], pointData[7]})
                 TInsert(uInd, {pointData[2], pointData[5], pointData[8]})
-                -- TInsert(vInd, StringPack(indPackS, pointData[1], pointData[4], pointData[7]))
-                -- TInsert(uInd, StringPack(indPackS, pointData[2], pointData[5], pointData[8]))
 
             -- Otherwise, just grab the verts
             else
                 TInsert(vInd, {tonumber(data[2]), tonumber(data[3]), tonumber(data[4])})
                 TInsert(uInd, {1, 2, 3})
-                -- TInsert(vInd, StringPack(indPackS, tonumber(data[2]), tonumber(data[3]), tonumber(data[4])))
-                -- TInsert(uInd, StringPack(indPackS, 1, 2, 3))
             end
         end
         data, lines[i] = nil, nil
@@ -499,7 +492,7 @@ local sceneMeshes = {}
 
 local matProj, matRotY, matRotZ, matRotX
 local vCamera, vLookDir = {0, 0, 0}, {0, 0, 0}
-local fTheta, fYaw, fPitch = 0, 0, 0
+local fYaw, fPitch = 0, 0
 local nLightDir
 
 local screenWidth, screenHeight, halfWidth, halfHeight
@@ -507,13 +500,6 @@ local trisDrawnLast = 0
 
 local elapsedTime = 0.1
 local timeLast, nowTime = computer.uptime(), computer.uptime()
-
--- Get elapsed time per-frame for mesh rotation, if needed
-local function updateElapsedTime()
-    nowTime = computer.uptime()
-    elapsedTime = nowTime - timeLast
-    timeLast = nowTime
-end
 
 -- Near plane and viewspace offset
 local nearPlane, nearNormal, vsOffset = {0, 0, fNear}, {0, 0, 1}, {1, 1, 0}
@@ -819,7 +805,7 @@ local function texturedTriangle(p, u, tri)
     end
 end
 
-local rasterizeStart; local rasterizeCumulative = 0
+local rasterizeStart; local rastCumulative = 0
 local testTri, vClipped = {}, {}
 local planeTopN, planeBotN, planeLeftN, planeRightN = {0, 1, 0}, {0, -1, 0}, {1, 0, 0}, {-1, 0, 0}
 
@@ -903,11 +889,11 @@ local function viewportClipTriangle(rasterTris)
         trisDrawnLast = trisDrawnLast + 1
     end
     rasterTris = nil
-    rasterizeCumulative = rasterizeCumulative + (GetCPUTime() - rasterizeStart)
+    rastCumulative = rastCumulative + (GetCPUTime() - rasterizeStart)
 end
 
 local projectionStart; local projCumulative = 0
-local segmentTimeStart; local segmentCumulative = 0
+local segmentTimeStart; local segCumulative = 0
 local pClipped, nPClipped = {}, 0
 local fNormal, line1, line2 = {0, 0, 0}, {0, 0, 0}, {0, 0, 0}
 local vCameraRay, normalToCamera = {0, 0, 0, 0}, {0, 0, 0, 0}
@@ -930,7 +916,6 @@ end
 local function rasterizeMesh(matView, sceneMesh)
 
     -- Rotate mesh in scene
-    -- if doModelRotate then fTheta = fTheta + elapsedTime end
     matRotX = mMakeRotationX(sceneMesh.rotation[1])
     matRotY = mMakeRotationY(sceneMesh.rotation[2])
 	matRotZ = mMakeRotationZ(sceneMesh.rotation[3])
@@ -940,8 +925,8 @@ local function rasterizeMesh(matView, sceneMesh)
 
     -- Build mesh rotation matrix, handles if mesh is rotating
     local matWorld = mMakeIdentity()
-    matWorld = mMultiplyMatrix(matRotZ, matRotX)
-    matWorld = mMultiplyMatrix(matWorld, matRotY)
+    matWorld = mMultiplyMatrix(matRotX, matRotY)
+    matWorld = mMultiplyMatrix(matWorld, matRotZ)
     matWorld = mMultiplyMatrix(matWorld, matTrans)
 
     -- First, project vertices
@@ -1070,17 +1055,17 @@ end
 -- ============================================================
 
 local debugCycles, maxDebugCycles = 1, 30
-local projectionTimeTotal, rasterizeTimeTotal, segmentTimeTotal = 0, 0, 0
+local projTimeTotal, rastTimeTotal, segTimeTotal = 0, 0, 0
 local debugFG, debugBG = 0xFFFFFF, 0x330040
 
 -- Print debug stats to the screen
 local function modelDebug()
-    projectionTimeTotal = projectionTimeTotal + projCumulative
-    rasterizeTimeTotal = rasterizeTimeTotal + rasterizeCumulative
-    segmentTimeTotal = segmentTimeTotal + segmentCumulative
-    local projAverage = projectionTimeTotal / debugCycles
-    local rastAverage = rasterizeTimeTotal / debugCycles
-    local segAverage = segmentTimeTotal / debugCycles
+    projTimeTotal = projTimeTotal + projCumulative
+    rastTimeTotal = rastTimeTotal + rastCumulative
+    segTimeTotal = segTimeTotal + segCumulative
+    local projAverage = projTimeTotal / debugCycles
+    local rastAverage = rastTimeTotal / debugCycles
+    local segAverage = segTimeTotal / debugCycles
 
     local sceneTris, sceneVerts = 0, 0
     for i = 1, #sceneMeshes do
@@ -1096,14 +1081,15 @@ local function modelDebug()
     SetText(1, 9, StringFormat("Loaded Meshes:  %4.0d", #loadedMeshes), debugFG, debugBG, false)
     SetText(1, 11, StringFormat("Meshes in Scene: %3.0d", #sceneMeshes), debugFG, debugBG, false)
 
-    segmentCumulative = 0
+    trisDrawnLast = 0
+    segCumulative = 0
     projCumulative = 0
-    rasterizeCumulative = 0
+    rastCumulative = 0
     debugCycles = debugCycles + 1
     if debugCycles > maxDebugCycles then
-        projectionTimeTotal = projAverage
-        rasterizeTimeTotal = rastAverage
-        segmentTimeTotal = segAverage
+        projTimeTotal = projAverage
+        rastTimeTotal = rastAverage
+        segTimeTotal = segAverage
         debugCycles = 2
     end
 end
@@ -1111,6 +1097,13 @@ end
 -- ============================================================
 -- CONTROL
 -- ============================================================
+
+-- Get elapsed time per-frame for mesh rotation, if needed
+local function updateElapsedTime()
+    nowTime = computer.uptime()
+    elapsedTime = nowTime - timeLast
+    timeLast = nowTime
+end
 
 local KEY_FORWARD, KEY_LEFT, KEY_BACKWARD, KEY_RIGHT = "W", "A", "S", "D"
 local KEY_UP, KEY_DOWN, KEY_QUIT = "Z", "X", "Q"
@@ -1196,9 +1189,7 @@ local function main()
 
     while true do
 
-        -- Update elapsed time
         updateElapsedTime()
-
         local exit = applyInputControls()
         if exit then
             gpu.ResetToCommandLine()
@@ -1208,15 +1199,9 @@ local function main()
             break
         end
 
-        -- Clear screen and draw projected triangles
         renderTriangles()
-
-        -- Draw debug, render screen
         modelDebug()
         UpdateScreen()
-
-        -- Reset debug values
-        trisDrawnLast = 0
 
         -- Take player's input controls (yielding)
         if doUserControl then inputManager.updateKeypress(inputManager) end

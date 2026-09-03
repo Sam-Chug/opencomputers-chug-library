@@ -9,7 +9,7 @@ local component = require("component")
 local shell = require("shell")
 local _, ops = shell.parse(...)
 local computer = require("computer")
-local version = "0.4.1a"
+local version = "0.4.2a"
 
 -- Graphics Library
 local gpu = require("chugraph")

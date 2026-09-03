@@ -5,7 +5,7 @@ local _, ops = shell.parse(...)
 local computer = require("computer")
 local term = require("term")
 
-local version = "0.3.3a"
+local version = "0.3.4a"
 
 local funcWidth, funcHeight = 0, 0
 local gpu, buffer, screenWidth, screenHeight

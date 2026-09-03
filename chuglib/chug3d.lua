@@ -655,16 +655,6 @@ end
 -- PROJECTION & RENDERING
 -- ============================================================
 
--- This seems kind of dumb
-local texU, texV, texW
-local daxStep, dbxStep
-local du1Step, du2Step
-local dv1Step, dv2Step
-local dw1Step, dw2Step
-local y1Delta, y2Delta, ax, bx
-local texSu, texEu, texSv, texEv, texSw, texEw
-local dx2, dx1, dy2, dy1, du2, du1, dv2, dv1, dw2, dw1
-
 -- Draw projected triangle to the screen
 local function texturedTriangle(p, u, tri)
 
@@ -693,23 +683,23 @@ local function texturedTriangle(p, u, tri)
         u[2][3], u[3][3] = u[3][3], u[2][3]
     end
 
-    dx1 = p[2][1] - p[1][1]
-    dy1 = p[2][2] - p[1][2]
-    du1 = u[2][1] - u[1][1]
-    dv1 = u[2][2] - u[1][2]
-    dw1 = u[2][3] - u[1][3]
+    local dx1 = p[2][1] - p[1][1]
+    local dy1 = p[2][2] - p[1][2]
+    local du1 = u[2][1] - u[1][1]
+    local dv1 = u[2][2] - u[1][2]
+    local dw1 = u[2][3] - u[1][3]
 
-    dx2 = p[3][1] - p[1][1]
-    dy2 = p[3][2] - p[1][2]
-    du2 = u[3][1] - u[1][1]
-    dv2 = u[3][2] - u[1][2]
-    dw2 = u[3][3] - u[1][3]
+    local dx2 = p[3][1] - p[1][1]
+    local dy2 = p[3][2] - p[1][2]
+    local du2 = u[3][1] - u[1][1]
+    local dv2 = u[3][2] - u[1][2]
+    local dw2 = u[3][3] - u[1][3]
 
-    texU, texV, texW = 0, 0, 0
-    daxStep = 0; dbxStep = 0
-    du1Step = 0; du2Step = 0
-    dv1Step = 0; dv2Step = 0
-    dw1Step = 0; dw2Step = 0
+    local texU, texV, texW = 0, 0, 0
+    local daxStep, dbxStep = 0, 0
+    local du1Step, du2Step = 0, 0
+    local dv1Step, dv2Step = 0, 0
+    local dw1Step, dw2Step = 0, 0
 
     daxStep = dx1 / abs(dy1)
     dbxStep = dx2 / abs(dy2)
@@ -722,19 +712,19 @@ local function texturedTriangle(p, u, tri)
 
     for i = p[1][2], p[2][2] do
 
-        y1Delta = i - p[1][2]
-        ax = (p[1][1] + y1Delta * daxStep) // 1
-        bx = (p[1][1] + y1Delta * dbxStep) // 1
+        local y1Delta = i - p[1][2]
+        local ax = (p[1][1] + y1Delta * daxStep) // 1
+        local bx = (p[1][1] + y1Delta * dbxStep) // 1
 
         -- Starting value
-        texSu = u[1][1] + y1Delta * du1Step
-        texSv = u[1][2] + y1Delta * dv1Step
-        texSw = u[1][3] + y1Delta * dw1Step
+        local texSu = u[1][1] + y1Delta * du1Step
+        local texSv = u[1][2] + y1Delta * dv1Step
+        local texSw = u[1][3] + y1Delta * dw1Step
 
         -- Ending value
-        texEu = u[1][1] + y1Delta * du2Step
-        texEv = u[1][2] + y1Delta * dv2Step
-        texEw = u[1][3] + y1Delta * dw2Step
+        local texEu = u[1][1] + y1Delta * du2Step
+        local texEv = u[1][2] + y1Delta * dv2Step
+        local texEw = u[1][3] + y1Delta * dw2Step
 
         if ax > bx then
             ax, bx = bx, ax
@@ -782,20 +772,20 @@ local function texturedTriangle(p, u, tri)
 
     for i = p[2][2], p[3][2] do
 
-        y1Delta = i - p[1][2]
-        y2Delta = i - p[2][2]
-        ax = (p[2][1] + y2Delta * daxStep) // 1
-        bx = (p[1][1] + y1Delta * dbxStep) // 1
+        local y1Delta = i - p[1][2]
+        local y2Delta = i - p[2][2]
+        local ax = (p[2][1] + y2Delta * daxStep) // 1
+        local bx = (p[1][1] + y1Delta * dbxStep) // 1
 
         -- Starting value
-        texSu = u[2][1] + y2Delta * du1Step
-        texSv = u[2][2] + y2Delta * dv1Step
-        texSw = u[2][3] + y2Delta * dw1Step
+        local texSu = u[2][1] + y2Delta * du1Step
+        local texSv = u[2][2] + y2Delta * dv1Step
+        local texSw = u[2][3] + y2Delta * dw1Step
 
         -- Ending value
-        texEu = u[1][1] + y1Delta * du2Step
-        texEv = u[1][2] + y1Delta * dv2Step
-        texEw = u[1][3] + y1Delta * dw2Step
+        local texEu = u[1][1] + y1Delta * du2Step
+        local texEv = u[1][2] + y1Delta * dv2Step
+        local texEw = u[1][3] + y1Delta * dw2Step
 
         if ax > bx then
             ax, bx = bx, ax
@@ -919,11 +909,13 @@ end
 local projectionStart; local projCumulative = 0
 local segmentTimeStart; local segmentCumulative = 0
 local pClipped, nPClipped = {}, 0
-local normal, line1, line2 = {0, 0, 0}, {0, 0, 0}, {0, 0, 0}
+local fNormal, line1, line2 = {0, 0, 0}, {0, 0, 0}, {0, 0, 0}
+local vCameraRay, normalToCamera = {0, 0, 0, 0}, {0, 0, 0, 0}
+local vUp, vTarget = {0, 1, 0, 1}, {0, 0, 1, 1}
 
 -- Get camera rotation matrix from player control
 local function getViewMatrix()
-    local vUp, vTarget = {0, 1, 0, 1}, {0, 0, 1, 1}
+    vUp, vTarget = {0, 1, 0, 1}, {0, 0, 1, 1}
     local matCameraPitch = mMakeRotationX(fPitch)
     local matCameraYaw = mMakeRotationY(fYaw)
     local matCameraRot = mMultiplyMatrix(matCameraPitch, matCameraYaw)
@@ -974,21 +966,21 @@ local function rasterizeMesh(matView, sceneMesh)
         -- Get face normal
         line1 = vSub(pVert[vInd[2]], pVert[vInd[1]])
         line2 = vSub(pVert[vInd[3]], pVert[vInd[1]])
-        normal = vCrossProduct(line1, line2)
-        normal = vNormalize(normal)
+        fNormal = vCrossProduct(line1, line2)
+        fNormal = vNormalize(fNormal)
 
         -- Compare face normal against camera normal for backface culling
-        local vCameraRay = vSub(pVert[vInd[1]], vCamera)
-        local normalToCamera = vDotProduct(normal, vCameraRay)
+        vCameraRay = vSub(pVert[vInd[1]], vCamera)
+        normalToCamera = vDotProduct(fNormal, vCameraRay)
 
         projCumulative = projCumulative + (GetCPUTime() - projectionStart)
         if normalToCamera < bfcThreshold then
             projectionStart = GetCPUTime()
 
             -- Get amount of shade relative to light normal, and find normal color if needed
-            local lightDp = max(min(lightBias + vDotProduct(nLightDir, normal), 1), shadeMaximum)
+            local lightDp = max(min(lightBias + vDotProduct(nLightDir, fNormal), 1), shadeMaximum)
             local tColor = 0x000000
-            if drawNormalColor then tColor = getColorFromNormal(normal) end
+            if drawNormalColor then tColor = getColorFromNormal(fNormal) end
 
             -- Check if triangle needs to be near-plane clipped
             if vsVert[vInd[1]][3] < fNear or
@@ -1091,7 +1083,7 @@ local function modelDebug()
     local segAverage = segmentTimeTotal / debugCycles
 
     SetText(1, 1, modelFile, debugFG, debugBG, false)
-    SetText(1, 3, string.format("TRIS: %d - VERT: %d", loadedMeshes[1].triCount, loadedMeshes[1].vertCount), debugFG, debugBG, false)
+    SetText(1, 3, string.format("T: %3.0d - V: %3.0d", loadedMeshes[1].triCount, loadedMeshes[1].vertCount), debugFG, debugBG, false)
     SetText(1, 5, string.format("DRAWN: %d", trisDrawnLast), debugFG, debugBG, false)
     SetText(1, 7, string.format("Proj: %0.1fms", (projAverage) * 1000), debugFG, debugBG, false)
     SetText(1, 9, string.format("Rast: %0.1fms", (rastAverage) * 1000), debugFG, debugBG, false)

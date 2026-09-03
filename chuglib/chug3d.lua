@@ -516,7 +516,7 @@ local nearPlane, nearNormal, vsOffset = {0, 0, fNear}, {0, 0, 1}, {1, 1, 0}
 local vsLeftDP, vsRightDP, vsTopDP, vsBottomDP, nearDP
 
 -- Load mesh from file and prepare it for rendering
-local function loadSceneMeshes()
+local function loadSceneMeshes(meshFilenames)
 
     -- Precalculate some commonly used variables
     nLightDir = vNormalize(lightDirection)
@@ -532,33 +532,36 @@ local function loadSceneMeshes()
     nearDP = vDotProduct(nearPlane, nearNormal)
 
     -- TODO: For meshes in scene:
-    -- Load each mesh into loadedMeshes
 
-    -- Load model from filename, if bmp exists with the same name, load it as well
-    if fileExists(modelFile) then
+    -- From input mesh filenames, parse .objs and load them into loadedMeshes
+    for i = 1, #meshFilenames do
 
-        -- TODO: Replace 1 with i in loop
-        loadedMeshes[1] = {vert = {}, uv = {}, vInd = {}, uInd = {}, tex = 1}
-        loadedMeshes[1].vert, loadedMeshes[1].uv, loadedMeshes[1].vInd, loadedMeshes[1].uInd = getMeshFromString(modelFile, nil, true)
+        -- Load model from filename, if bmp exists with the same name, load it as well
+        if fileExists(meshFilenames[i]) then
 
-        -- TODO: Check if texture name matches already loaded texture
-        local texString = modelFile:gsub(".obj", ".bmp")
-        local loadedTex, issue = bmp.ParseBMP(texString)
-        if loadedTex ~= false then
-            loadedTextures[2] = {name = texString, w = #loadedTex, h = #loadedTex[1], tex = loadedTex}
-            loadedMeshes[1].tex = 2
-        else print(issue) end
+            -- TODO: Replace 1 with i in loop
+            loadedMeshes[i] = {name = modelFile:gsub(".obj", ""), vert = {}, uv = {}, vInd = {}, uInd = {}, tex = 1}
+            loadedMeshes[i].vert, loadedMeshes[i].uv, loadedMeshes[i].vInd, loadedMeshes[i].uInd = getMeshFromString(meshFilenames[i], nil, true)
 
-    -- If specified model file doesn't exist, use the cube
-    else
-        modelFile = "default-cube-fallback"
-        loadedMeshes[1] = {vert = {}, uv = {}, vInd = {}, uInd = {}, tex = 1}
-        loadedMeshes[1].vert, loadedMeshes[1].uv, loadedMeshes[1].vInd, loadedMeshes[1].uInd = getMeshFromString(nil, defaultCubeOBJ, false)
+            -- TODO: Check if texture name matches already loaded texture
+            local texString = modelFile:gsub(".obj", ".bmp")
+            local loadedTex, issue = bmp.ParseBMP(texString)
+            if loadedTex ~= false then
+                loadedTextures[2] = {name = texString, w = #loadedTex, h = #loadedTex[1], tex = loadedTex}
+                loadedMeshes[i].tex = 2
+            else print(issue) end
+
+        -- If specified model file doesn't exist, use the cube
+        else
+            modelFile = "default-cube-fallback"
+            loadedMeshes[i] = {name = modelFile, vert = {}, uv = {}, vInd = {}, uInd = {}, tex = 1}
+            loadedMeshes[i].vert, loadedMeshes[1].uv, loadedMeshes[1].vInd, loadedMeshes[1].uInd = getMeshFromString(nil, defaultCubeOBJ, false)
+        end
+
+        -- Get tricount for this mesh
+        loadedMeshes[1].triCount = #loadedMeshes[1].vInd
+        loadedMeshes[1].vertCount = #loadedMeshes[1].vert
     end
-
-    -- Get tricount
-    loadedMeshes[1].triCount = #loadedMeshes[1].vInd
-    loadedMeshes[1].vertCount = #loadedMeshes[1].vert
 
     -- TODO: End loop, now spawn objects in scene
 
@@ -1179,7 +1182,7 @@ end
 
 local function main()
     ClearScreen()
-    loadSceneMeshes()
+    loadSceneMeshes({modelFile})
     gpu.SetSceneBackground(backgroundColor)
 
     -- Force garbage collection before starting

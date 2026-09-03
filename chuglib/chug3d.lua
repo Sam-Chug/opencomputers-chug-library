@@ -1178,9 +1178,11 @@ end
     -- New table "sceneMeshes" -> array of meshInstance
 
     -- meshInstance table gains new values:
-        -- "meshInstance" -> reference to some loaded vertex + uv + tri set (see below)
-        -- position -> XYZ values to translate the mesh during projection
-        -- rotation -> XYZ values to rotate the mesh during projection
+        -- "meshData" -> reference to some loaded vertex + uv + tri set (see below)
+        -- "parent" -> points towards another meshInstance for position/rotation inheritance
+        -- "children" -> array of child element references for this instance
+        -- "position" -> XYZ values to translate the mesh during projection
+        -- "rotation" -> XYZ values to rotate the mesh during projection
 
     -- meshInstance table removes values:
         -- vertex + uv data gets moved to loadedMeshData

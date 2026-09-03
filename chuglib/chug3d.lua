@@ -9,7 +9,7 @@ local component = require("component")
 local shell = require("shell")
 local _, ops = shell.parse(...)
 local computer = require("computer")
-local version = "0.3.2a"
+local version = "0.4.0a"
 
 -- Graphics Library
 local gpu = require("chugraph")
@@ -48,8 +48,6 @@ local lightBias = 0.3                   -- Softens faces that are 90 degrees off
 local fNear = 0.25                      -- Near plane distance
 local fFar = 1000                       -- Far plane distance
 local fFov = 90                         -- Field of view
-local defaultTranslation = {0, 0, 7.5}  -- Translate world by these XYZ values upon startup
-local defaultRotation = {0, 0, 1}       -- TODO: Rotate camera by these values upon startup
 local modelFile = "teapot.obj"          -- Default loaded model, pretty much just for debugging
 
 -- TODO: This is getting quite lengthy, it would be nice to read more complex settings from a setup file
@@ -114,7 +112,7 @@ local ColorFromRGB1 = gpu.ClosestValidHexFromRGB1
 local TInsert = table.insert; local TRemove = table.remove
 
 -- ============================================================
--- TEXTURES & MODELS (Move to chugraph?)
+-- DEFAULT TEXTURES & MODELS
 -- ============================================================
 
 -- Default cube, if no meshes are able to load
@@ -134,10 +132,6 @@ local missingTex = {
     {0xFF00FF, 0x2D2D2D, 0xFF00FF, 0x2D2D2D},
     {0x2D2D2D, 0xFF00FF, 0x2D2D2D, 0xFF00FF},
 }
-
--- TODO: This table should hold all loaded texture data associated with an .obj
--- Triangles should get a texture index, which will refer to an index in this table
-local loadedTextures = {{name = "missingTex", w = #missingTex, h = #missingTex[1], tex = missingTex}}
 
 -- ============================================================
 -- .OBJ MESH LOADING
@@ -518,7 +512,10 @@ end
 -- RUNTIME
 -- ============================================================
 
-local loadedMesh = {}
+local loadedMeshes = {}
+local loadedTextures = {{name = "missingTex", w = #missingTex, h = #missingTex[1], tex = missingTex}}
+local sceneMeshes = {}
+
 local matProj, matRotY, matRotZ, matRotX
 local vCamera, vLookDir = {0, 0, 0}, {0, 0, 0}
 local fTheta, fYaw, fPitch = 0, 0, 0
@@ -544,7 +541,7 @@ local nearPlane, nearNormal, vsOffset = {0, 0, fNear}, {0, 0, 1}, {1, 1, 0}
 local vsLeftDP, vsRightDP, vsTopDP, vsBottomDP, nearDP
 
 -- Load mesh from file and prepare it for rendering
-local function createMesh()
+local function loadSceneMeshes()
 
     -- Precalculate some commonly used variables
     nLightDir = vNormalize(lightDirection)
@@ -552,47 +549,48 @@ local function createMesh()
     halfWidth = 0.5 * screenWidth; halfHeight = 0.5 * screenHeight
     matProj = mMakeProjection(fFov, gpu.GetAspectRatio(), fNear, fFar)
 
+    -- Viewspace and near plane dot products for clipping triangles
     vsLeftDP = vDotProduct({1, 0, 0}, {1, 0, 0})
     vsRightDP = vDotProduct({screenWidth + 1, 0, 0}, {-1, 0, 0})
     vsTopDP = vDotProduct({0, 0, 0}, {0, 1, 0})
     vsBottomDP = vDotProduct({0, screenHeight, 0}, {0, -1, 0})
     nearDP = vDotProduct(nearPlane, nearNormal)
 
-    -- Load model, or default to the cube
-    -- Verts, Projected Verts, Viewspace Verts, Tris, Textures, Lazy BF Count Tricount, Vertcount
-    loadedMesh = {
-        vert = {}, pVert = {}, vsVert = {}, -- Raw vertices, and two arrays for storing projected and viewspace vertices
-        uvs = {},                           -- Raw texture coordinates
-        vInd = {}, uInd = {},               -- For each triangle, its vertex and uv lookup indices
-        triCount = 0, vertCount = 0, texIndex = 1
-    }
+    -- TODO: For meshes in scene:
+    -- Load each mesh into loadedMeshes
 
     -- Load model from filename, if bmp exists with the same name, load it as well
     if fileExists(modelFile) then
-        loadedMesh.vert, loadedMesh.uvs, loadedMesh.vInd, loadedMesh.uInd = getMeshFromString(modelFile, nil, true)
+
+        -- TODO: Replace 1 with i in loop
+        loadedMeshes[1] = {vert = {}, uv = {}, vInd = {}, uInd = {}, tex = 1}
+        loadedMeshes[1].vert, loadedMeshes[1].uv, loadedMeshes[1].vInd, loadedMeshes[1].uInd = getMeshFromString(modelFile, nil, true)
+
+        -- TODO: Check if texture name matches already loaded texture
         local texString = modelFile:gsub(".obj", ".bmp")
         local loadedTex, issue = bmp.ParseBMP(texString)
         if loadedTex ~= false then
             loadedTextures[2] = {name = texString, w = #loadedTex, h = #loadedTex[1], tex = loadedTex}
-            loadedMesh.texIndex = 2
+            loadedMeshes[1].tex = 2
         else print(issue) end
 
     -- If specified model file doesn't exist, use the cube
     else
         modelFile = "default-cube-fallback"
-        loadedMesh.vert, loadedMesh.uvs, loadedMesh.vInd, loadedMesh.uInd = getMeshFromString(nil, defaultCubeOBJ, false)
+        loadedMeshes[1] = {vert = {}, uv = {}, vInd = {}, uInd = {}, tex = 1}
+        loadedMeshes[1].verts, loadedMeshes[1].uvs, loadedMeshes[1].vInd, loadedMeshes[1].uInd = getMeshFromString(nil, defaultCubeOBJ, false)
     end
 
     -- Get tricount
-    loadedMesh.triCount = #loadedMesh.vInd
-    loadedMesh.vertCount = #loadedMesh.vert
+    loadedMeshes[1].triCount = #loadedMeshes[1].vInd
+    loadedMeshes[1].vertCount = #loadedMeshes[1].vert
 
-    -- We now have a list of verts and a list of tris with indeces pointing towards their 3 vertices
-    -- Also, create a vertex list to contain projected and viewspace vertices
-    for i = 1, loadedMesh.vertCount do
-        loadedMesh.pVert[i] = {0, 0, 0, 1}
-        loadedMesh.vsVert[i] = {0, 0, 0, 1}
-    end
+    -- TODO: End loop, now spawn objects in scene
+
+    -- TODO: For objects to be placed in scene:
+    sceneMeshes[1] = {mesh = 1, parent = nil, children = {}, position = {0, 0, 7.5}, rotation = {0, 0, 0}}
+    -- sceneMeshes[2] = {mesh = 1, parent = nil, children = {}, position = {0, 3, 3}, rotation = {0, 0.9, 0}}
+    -- sceneMeshes[3] = {mesh = 1, parent = nil, children = {}, position = {0, 6, 3}, rotation = {0, -20, 0}}
 end
 
 -- ============================================================
@@ -939,27 +937,8 @@ local segmentTimeStart; local segmentCumulative = 0
 local pClipped, nPClipped = {}, 0
 local normal, line1, line2 = {0, 0, 0}, {0, 0, 0}, {0, 0, 0}
 
--- Project verts, and then triangles from loaded mesh data
--- Each triangle gets sent into the rasterizer
-local function rasterizeMesh()
-
-    -- Rotate mesh if rotation enabled
-    if doModelRotate then fTheta = fTheta + elapsedTime end
-	matRotZ = mMakeRotationZ(doModelRotateZ and fTheta * 0.5 or 0)
-	matRotX = mMakeRotationX(doModelRotateX and fTheta or 0)
-    matRotY = mMakeRotationY(doModelRotateY and fTheta * 0.25 or 0)
-
-    -- Amount to translate model in scene
-    -- TODO: This should probably be packed into the loadedMesh table
-    local matTrans = mMakeTranslation(defaultTranslation[1], defaultTranslation[2], defaultTranslation[3])
-
-    -- Build mesh rotation matrix, handles if mesh is rotating
-    local matWorld = mMakeIdentity()
-    matWorld = mMultiplyMatrix(matRotZ, matRotX)
-    matWorld = mMultiplyMatrix(matWorld, matRotY)
-    matWorld = mMultiplyMatrix(matWorld, matTrans)
-
-    -- Get camera rotation matrix from player control
+-- Get camera rotation matrix from player control
+local function getViewMatrix()
     local vUp, vTarget = {0, 1, 0, 1}, {0, 0, 1, 1}
     local matCameraPitch = mMakeRotationX(fPitch)
     local matCameraYaw = mMakeRotationY(fYaw)
@@ -967,26 +946,50 @@ local function rasterizeMesh()
     vLookDir = mMultiplyVector(matCameraRot, vTarget)
     vTarget = vAdd(vCamera, vLookDir)
     local matCamera = mPointAt(vCamera, vTarget, vUp) -- vCamera, vTarget, vUp
-    local matView = mQuickInverse(matCamera)
+    return mQuickInverse(matCamera)
+end
+
+-- Project verts, and then triangles from loaded mesh data
+-- Each triangle gets sent into the rasterizer
+local function rasterizeMesh(matView, sceneMesh)
+
+    -- Rotate mesh in scene
+    -- if doModelRotate then fTheta = fTheta + elapsedTime end
+    matRotX = mMakeRotationX(sceneMesh.rotation[1])
+    matRotY = mMakeRotationY(sceneMesh.rotation[2])
+	matRotZ = mMakeRotationZ(sceneMesh.rotation[3])
+
+    -- Translate model in scene
+    local matTrans = mMakeTranslation(sceneMesh.position[1], sceneMesh.position[2], sceneMesh.position[3])
+
+    -- Build mesh rotation matrix, handles if mesh is rotating
+    local matWorld = mMakeIdentity()
+    matWorld = mMultiplyMatrix(matRotZ, matRotX)
+    matWorld = mMultiplyMatrix(matWorld, matRotY)
+    matWorld = mMultiplyMatrix(matWorld, matTrans)
 
     -- First, project vertices
-    for i = 1, loadedMesh.vertCount do
-        mMultiplyVectorR(loadedMesh.pVert[i], matWorld, table.pack(string.unpack(vertPackS, loadedMesh.vert[i])))
-        mMultiplyVectorR(loadedMesh.vsVert[i], matView, loadedMesh.pVert[i])
+    local pVert = {}
+    local vsVert = {}
+    for i = 1, loadedMeshes[sceneMesh.mesh].vertCount do
+        pVert[i], vsVert[i] = {0, 0, 0, 1}, {0, 0, 0, 1}
+        mMultiplyVectorR(pVert[i], matWorld, table.pack(string.unpack(vertPackS, loadedMeshes[sceneMesh.mesh].vert[i])))
+        mMultiplyVectorR(vsVert[i], matView, pVert[i])
     end
 
     -- Then use projected vertices to construct and 
-    for i = 1, loadedMesh.triCount do
+    local meshRef = loadedMeshes[sceneMesh.mesh]
+    for i = 1, loadedMeshes[sceneMesh.mesh].triCount do
         projectionStart = GetCPUTime()
 
         -- Get face normal
-        line1 = vSub(loadedMesh.pVert[loadedMesh.vInd[i][2]], loadedMesh.pVert[loadedMesh.vInd[i][1]])
-        line2 = vSub(loadedMesh.pVert[loadedMesh.vInd[i][3]], loadedMesh.pVert[loadedMesh.vInd[i][1]])
+        line1 = vSub(pVert[meshRef.vInd[i][2]], pVert[meshRef.vInd[i][1]])
+        line2 = vSub(pVert[meshRef.vInd[i][3]], pVert[meshRef.vInd[i][1]])
         normal = vCrossProduct(line1, line2)
         normal = vNormalize(normal)
 
         -- Compare face normal against camera normal for backface culling
-        local vCameraRay = vSub(loadedMesh.pVert[loadedMesh.vInd[i][1]], vCamera)
+        local vCameraRay = vSub(pVert[meshRef.vInd[i][1]], vCamera)
         local normalToCamera = vDotProduct(normal, vCameraRay)
 
         projCumulative = projCumulative + (GetCPUTime() - projectionStart)
@@ -999,29 +1002,29 @@ local function rasterizeMesh()
             if drawNormalColor then tColor = getColorFromNormal(normal) end
 
             -- Check if triangle needs to be near-plane clipped
-            if loadedMesh.vsVert[loadedMesh.vInd[i][1]][3] < fNear or
-               loadedMesh.vsVert[loadedMesh.vInd[i][2]][3] < fNear or
-               loadedMesh.vsVert[loadedMesh.vInd[i][3]][3] < fNear then
+            if vsVert[meshRef.vInd[i][1]][3] < fNear or
+               vsVert[meshRef.vInd[i][2]][3] < fNear or
+               vsVert[meshRef.vInd[i][3]][3] < fNear then
 
                 -- If so, clip it
                 nPClipped, pClipped[1], pClipped[2] = triClipPlane(nearDP, nearNormal, {
-                    {loadedMesh.vsVert[loadedMesh.vInd[i][1]],
-                     loadedMesh.vsVert[loadedMesh.vInd[i][2]],
-                     loadedMesh.vsVert[loadedMesh.vInd[i][3]]},
-                    {table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.uInd[i][1]])),
-                     table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.uInd[i][2]])),
-                     table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.uInd[i][3]]))}
+                    {vsVert[meshRef.vInd[i][1]],
+                     vsVert[meshRef.vInd[i][2]],
+                     vsVert[meshRef.vInd[i][3]]},
+                    {table.pack(string.unpack(uvPackS, meshRef.uv[meshRef.uInd[i][1]])),
+                     table.pack(string.unpack(uvPackS, meshRef.uv[meshRef.uInd[i][2]])),
+                     table.pack(string.unpack(uvPackS, meshRef.uv[meshRef.uInd[i][3]]))}
                 })
             else
                 -- Otherwise, skip clip
                 nPClipped = 1
                 pClipped[1] = {
-                    {loadedMesh.vsVert[loadedMesh.vInd[i][1]],
-                     loadedMesh.vsVert[loadedMesh.vInd[i][2]],
-                     loadedMesh.vsVert[loadedMesh.vInd[i][3]]},
-                    {table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.uInd[i][1]])),
-                     table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.uInd[i][2]])),
-                     table.pack(string.unpack(uvPackS, loadedMesh.uvs[loadedMesh.uInd[i][3]]))}
+                    {vsVert[meshRef.vInd[i][1]],
+                     vsVert[meshRef.vInd[i][2]],
+                     vsVert[meshRef.vInd[i][3]]},
+                    {table.pack(string.unpack(uvPackS, meshRef.uv[meshRef.uInd[i][1]])),
+                     table.pack(string.unpack(uvPackS, meshRef.uv[meshRef.uInd[i][2]])),
+                     table.pack(string.unpack(uvPackS, meshRef.uv[meshRef.uInd[i][3]]))}
                 }
             end
 
@@ -1068,7 +1071,7 @@ local function rasterizeMesh()
                 pClipped[n][1][3][2] = pClipped[n][1][3][2] * halfHeight
 
                 -- Copy texture over
-                pClipped[n][3] = loadedMesh.texIndex
+                pClipped[n][3] = meshRef.tex
                 pClipped[n][4] = tColor
                 pClipped[n][5] = lightDp
 
@@ -1099,7 +1102,7 @@ local function modelDebug()
     local segAverage = segmentTimeTotal / debugCycles
 
     SetText(1, 1, modelFile, debugFG, debugBG, false)
-    SetText(1, 3, string.format("TRIS: %d - VERT: %d", loadedMesh.triCount, loadedMesh.vertCount), debugFG, debugBG, false)
+    SetText(1, 3, string.format("TRIS: %d - VERT: %d", loadedMeshes[1].triCount, loadedMeshes[1].vertCount), debugFG, debugBG, false)
     SetText(1, 5, string.format("DRAWN: %d", trisDrawnLast), debugFG, debugBG, false)
     SetText(1, 7, string.format("Proj: %0.1fms", (projAverage) * 1000), debugFG, debugBG, false)
     SetText(1, 9, string.format("Rast: %0.1fms", (rastAverage) * 1000), debugFG, debugBG, false)
@@ -1186,6 +1189,7 @@ end
 
     -- meshInstance table removes values:
         -- vertex + uv data gets moved to loadedMeshData
+        -- Projected verts shouldn't be saved, just used during rasterizeMesh() and then disposed
 
 -- New scene-setting format:
     -- If no format set, load scene as it is now (mesh with no translation or rotation)
@@ -1210,12 +1214,16 @@ end
 local function renderTriangles()
     ClearScreen()
     resetDepthBuffer()
-    rasterizeMesh()
+
+    local viewMat = getViewMatrix()
+    for i = 1, #sceneMeshes do
+        rasterizeMesh(viewMat, sceneMeshes[i])
+    end
 end
 
 local function main()
     ClearScreen()
-    createMesh()
+    loadSceneMeshes()
     gpu.SetSceneBackground(backgroundColor)
 
     -- Force garbage collection before starting

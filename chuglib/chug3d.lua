@@ -219,6 +219,13 @@ local function vAdd(v1, v2)
     return {v1[1] + v2[1], v1[2] + v2[2], v1[3] + v2[3], 1}
 end
 
+-- Add vector v2 to vector reference v1
+local function vAddR(v1, v2)
+    v1[1] = v1[1] + v2[1]
+    v1[2] = v1[2] + v2[2]
+    v1[3] = v1[3] + v2[3]
+end
+
 -- Subtract one vector from another
 local function vSub(v1, v2)
     return {v1[1] - v2[1], v1[2] - v2[2], v1[3] - v2[3], 1}
@@ -229,9 +236,16 @@ local function vMul(v1, k)
     return {v1[1] * k, v1[2] * k, v1[3] * k, 1}
 end
 
--- Divide vector by a value K
+-- Divide vector v1 by a value K
 local function vDiv(v1, k)
     return {v1[1] / k, v1[2] / k, v1[3] / k, 1}
+end
+
+-- Divide reverence vector v1 by a value K
+local function vDivR(v1, k)
+    v1[1] = v1[1] / k
+    v1[2] = v1[2] / k
+    v1[3] = v1[3] / k
 end
 
 -- Get dot product of two input vectors
@@ -239,10 +253,18 @@ local function vDotProduct(v1, v2)
     return v1[1] * v2[1] + v1[2] * v2[2] + v1[3] * v2[3]
 end
 
--- Normalize vector between -1 and 1
+-- Normalize vector
 local function vNormalize(v)
     local l = vDotProduct(v, v) ^ -0.5
     return {v[1] * l, v[2] * l, v[3] * l, 1}
+end
+
+-- Normalize reverence vector v
+local function vNormalizeR(v)
+    local l = vDotProduct(v, v) ^ -0.5
+    v[1] = v[1] * l
+    v[2] = v[2] * l
+    v[3] = v[3] * l
 end
 
 -- Get cross product of two input vectors
@@ -453,11 +475,11 @@ end
 
 local function mPointAt(pos, target, up)
     local newForward = vSub(target, pos)
-    newForward = vNormalize(newForward)
+    vNormalizeR(newForward)
 
     local a = vMul(newForward, vDotProduct(up, newForward))
     local newUp = vSub(up, a)
-    newUp = vNormalize(newUp)
+    vNormalizeR(newUp)
 
     local newRight = vCrossProduct(newUp, newForward)
 
@@ -892,8 +914,7 @@ local function viewportClipTriangle(rasterTris)
     rastCumulative = rastCumulative + (GetCPUTime() - rasterizeStart)
 end
 
-local projectionStart; local projCumulative = 0
-local segmentTimeStart; local segCumulative = 0
+local projectionStart, projCumulative = 0, 0
 local pClipped, nPClipped = {}, 0
 local fNormal, line1, line2 = {0, 0, 0}, {0, 0, 0}, {0, 0, 0}
 local vCameraRay, normalToCamera = {0, 0, 0, 0}, {0, 0, 0, 0}
@@ -913,7 +934,7 @@ end
 
 -- Project verts, and then triangles from loaded mesh data
 -- Each triangle gets sent into the rasterizer
-local function rasterizeMesh(matView, sceneMesh)
+local function drawSceneMeshes(matView, sceneMesh)
 
     -- Rotate mesh in scene
     matRotX = mMakeRotationX(sceneMesh.rotation[1])
@@ -952,7 +973,7 @@ local function rasterizeMesh(matView, sceneMesh)
         line1 = vSub(pVert[vInd[2]], pVert[vInd[1]])
         line2 = vSub(pVert[vInd[3]], pVert[vInd[1]])
         fNormal = vCrossProduct(line1, line2)
-        fNormal = vNormalize(fNormal)
+        vNormalizeR(fNormal)
 
         -- Compare face normal against camera normal for backface culling
         vCameraRay = vSub(pVert[vInd[1]], vCamera)
@@ -1013,9 +1034,9 @@ local function rasterizeMesh(matView, sceneMesh)
                 pClipped[n][2][3][3] = 1 / pClipped[n][1][3][4]
 
                 -- Scale into view
-                pClipped[n][1][1] = vDiv(pClipped[n][1][1], pClipped[n][1][1][4])
-                pClipped[n][1][2] = vDiv(pClipped[n][1][2], pClipped[n][1][2][4])
-                pClipped[n][1][3] = vDiv(pClipped[n][1][3], pClipped[n][1][3][4])
+                vDivR(pClipped[n][1][1], pClipped[n][1][1][4])
+                vDivR(pClipped[n][1][2], pClipped[n][1][2][4])
+                vDivR(pClipped[n][1][3], pClipped[n][1][3][4])
 
                 -- Invert XY
                 pClipped[n][1][1][1] = -pClipped[n][1][1][1]
@@ -1026,9 +1047,9 @@ local function rasterizeMesh(matView, sceneMesh)
 				pClipped[n][1][3][2] = -pClipped[n][1][3][2]
 
                 -- Offset verts into visible normalized space
-                pClipped[n][1][1] = vAdd(pClipped[n][1][1], vsOffset)
-                pClipped[n][1][2] = vAdd(pClipped[n][1][2], vsOffset)
-                pClipped[n][1][3] = vAdd(pClipped[n][1][3], vsOffset)
+                vAddR(pClipped[n][1][1], vsOffset)
+                vAddR(pClipped[n][1][2], vsOffset)
+                vAddR(pClipped[n][1][3], vsOffset)
                 pClipped[n][1][1][1] = pClipped[n][1][1][1] * halfWidth
                 pClipped[n][1][2][1] = pClipped[n][1][2][1] * halfWidth
                 pClipped[n][1][3][1] = pClipped[n][1][3][1] * halfWidth
@@ -1055,17 +1076,15 @@ end
 -- ============================================================
 
 local debugCycles, maxDebugCycles = 1, 30
-local projTimeTotal, rastTimeTotal, segTimeTotal = 0, 0, 0
+local projTimeTotal, rastTimeTotal = 0, 0
 local debugFG, debugBG = 0xFFFFFF, 0x330040
 
 -- Print debug stats to the screen
 local function modelDebug()
     projTimeTotal = projTimeTotal + projCumulative
     rastTimeTotal = rastTimeTotal + rastCumulative
-    segTimeTotal = segTimeTotal + segCumulative
     local projAverage = projTimeTotal / debugCycles
     local rastAverage = rastTimeTotal / debugCycles
-    local segAverage = segTimeTotal / debugCycles
 
     local sceneTris, sceneVerts = 0, 0
     for i = 1, #sceneMeshes do
@@ -1082,14 +1101,12 @@ local function modelDebug()
     SetText(1, 11, StringFormat("Meshes in Scene: %3.0d", #sceneMeshes), debugFG, debugBG, false)
 
     trisDrawnLast = 0
-    segCumulative = 0
     projCumulative = 0
     rastCumulative = 0
     debugCycles = debugCycles + 1
     if debugCycles > maxDebugCycles then
         projTimeTotal = projAverage
         rastTimeTotal = rastAverage
-        segTimeTotal = segAverage
         debugCycles = 2
     end
 end
@@ -1175,7 +1192,7 @@ local function renderTriangles()
 
     local viewMat = getViewMatrix()
     for i = 1, #sceneMeshes do
-        rasterizeMesh(viewMat, sceneMeshes[i])
+        drawSceneMeshes(viewMat, sceneMeshes[i])
     end
 end
 

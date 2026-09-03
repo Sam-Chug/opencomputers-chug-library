@@ -893,7 +893,6 @@ local function viewportClipTriangle(rasterTris)
     ::skipClip::
 
     -- Rasterize triangles based on what was specified in the cl args
-    rasterizeStart = GetCPUTime() -- Timing
     for i = 1, nNewTriangles do
 
         -- Draw wireframe
@@ -909,7 +908,6 @@ local function viewportClipTriangle(rasterTris)
         trisDrawnLast = trisDrawnLast + 1
     end
     rasterTris = nil
-    rastCumulative = rastCumulative + (GetCPUTime() - rasterizeStart)
 end
 
 local projectionStart, projCumulative = 0, 0
@@ -933,6 +931,8 @@ end
 -- Project verts, and then triangles from loaded mesh data
 -- Each triangle gets sent into the rasterizer
 local function drawSceneMeshes(matView, sceneMesh)
+
+    projectionStart = GetCPUTime()
 
     -- Rotate mesh in scene
     matRotX = mMakeRotationX(sceneMesh.rotation[1])
@@ -961,7 +961,6 @@ local function drawSceneMeshes(matView, sceneMesh)
 
     -- Then use projected vertices to construct and 
     for i = 1, meshRef.triCount do
-        projectionStart = GetCPUTime()
 
         -- Unpack vertex and uv indices
         vInd = meshRef.vInd[i]
@@ -977,9 +976,7 @@ local function drawSceneMeshes(matView, sceneMesh)
         vCameraRay = vSub(pVert[vInd[1]], vCamera)
         normalToCamera = vDotProduct(fNormal, vCameraRay)
 
-        projCumulative = projCumulative + (GetCPUTime() - projectionStart)
         if normalToCamera < bfcThreshold then
-            projectionStart = GetCPUTime()
 
             -- Get amount of shade relative to light normal, and find normal color if needed
             local lightDp = max(min(lightBias + vDotProduct(nLightDir, fNormal), 1), shadeMaximum)
@@ -1013,9 +1010,7 @@ local function drawSceneMeshes(matView, sceneMesh)
                 }
             end
 
-            projCumulative = projCumulative + (GetCPUTime() - projectionStart) -- Timing point end
             for n = 1, nPClipped do
-                projectionStart = GetCPUTime()
 
                 -- Project points and uvs from 3D to 2D
                 pClipped[n][1][1] = mMultiplyVector(matProj, pClipped[n][1][1])
@@ -1061,12 +1056,12 @@ local function drawSceneMeshes(matView, sceneMesh)
                 pClipped[n][5] = lightDp
 
                 -- Send triangle to be viewport clipped and then rendered
-                projCumulative = projCumulative + (GetCPUTime() - projectionStart)
                 viewportClipTriangle({pClipped[n]})
                 pClipped[n] = nil
             end
         end
     end
+    projCumulative = projCumulative + (GetCPUTime() - projectionStart)
 end
 
 -- ============================================================
@@ -1093,10 +1088,10 @@ local function modelDebug()
     gpu.Fill(1, 1, 27, 12, debugBG, debugBG)
     SetText(1, 1, StringFormat("DEBUG         Chug3D %s", version), debugFG, debugBG, false)
     SetText(1, 3, StringFormat("Tris: %6.0d | Vert: %6.0d", sceneTris, sceneVerts), debugFG, debugBG, false)
-    SetText(1, 5, StringFormat("Proj: %4.1fms | Rast: %4.1fms", (projAverage) * 1000, (rastAverage) * 1000), debugFG, debugBG, false)
-    SetText(1, 7, StringFormat("Tris Drawn:    %5.0d", trisDrawnLast), debugFG, debugBG, false)
-    SetText(1, 9, StringFormat("Loaded Meshes:  %4.0d", #loadedMeshes), debugFG, debugBG, false)
-    SetText(1, 11, StringFormat("Meshes in Scene: %3.0d", #sceneMeshes), debugFG, debugBG, false)
+    SetText(1, 5, StringFormat("Render Time: %12.1fms", (projAverage) * 1000), debugFG, debugBG, false)
+    SetText(1, 7, StringFormat("Tris Drawn:    %12.0d", trisDrawnLast), debugFG, debugBG, false)
+    SetText(1, 9, StringFormat("Loaded Meshes:  %11.0d", #loadedMeshes), debugFG, debugBG, false)
+    SetText(1, 11, StringFormat("Meshes in Scene: %10.0d", #sceneMeshes), debugFG, debugBG, false)
 
     trisDrawnLast = 0
     projCumulative = 0

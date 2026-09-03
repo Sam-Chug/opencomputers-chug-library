@@ -1171,6 +1171,27 @@ end
 -- RUN THE DAMN THING
 -- ============================================================
 
+-- TODO: Mesh Instancing
+-- New data structure:
+    -- loadedMesh becomes meshInstance
+    -- New table "loadedMeshData" as an array of loaded vertex + uv + tri sets
+    -- New table "sceneMeshes" -> array of meshInstance
+
+    -- meshInstance table gains new values:
+        -- "meshInstance" -> reference to some loaded vertex + uv + tri set (see below)
+        -- position -> XYZ values to translate the mesh during projection
+        -- rotation -> XYZ values to rotate the mesh during projection
+
+    -- meshInstance table removes values:
+        -- vertex + uv data gets moved to loadedMeshData
+
+-- New scene-setting format:
+    -- If no format set, load scene as it is now (mesh with no translation or rotation)
+    -- File specifying a scene's data can be passed through arguments:
+        -- Meshes to load
+        -- Position of meshes
+        -- Functions to apply to loaded meshes (translation + rotation)
+
 local function renderTriangles()
     ClearScreen()
     resetDepthBuffer()

@@ -1192,6 +1192,19 @@ end
         -- Position of meshes
         -- Functions to apply to loaded meshes (translation + rotation)
 
+-- TODO: Packaging Refactor
+-- This needs to be usable from other scripts:
+    -- Move chugraph instance to main()
+    -- main() should only activate if some argument is passed
+    -- New script to demo 3d graphics in the same way as chug3d does now, with arguments and such
+    -- Should work with the above instancing refactor
+    -- Most of the functions in chug3d are helpers, and do not need to be accessible outside of the script
+    -- renderTriangles() becomes RenderTriangles(), and handles rendering triangles
+        -- Remove ClearScreen() from RenderTriangles()
+    -- Things to move:
+        -- DepthBuffer should be moved to chugraph for future shader functionality
+        -- SetPixelXYZ would be an example of a SetPixel that respects and sets the DepthBuffer in chugraph
+
 local function renderTriangles()
     ClearScreen()
     resetDepthBuffer()

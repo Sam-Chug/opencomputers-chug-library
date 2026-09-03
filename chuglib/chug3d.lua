@@ -944,17 +944,17 @@ local function rasterizeMesh(matView, sceneMesh)
     matWorld = mMultiplyMatrix(matWorld, matTrans)
 
     -- First, project vertices
+    local meshRef = loadedMeshes[sceneMesh.mesh]
+    local vInd, uInd
     local pVert = {}
     local vsVert = {}
     for i = 1, loadedMeshes[sceneMesh.mesh].vertCount do
         pVert[i], vsVert[i] = {0, 0, 0, 1}, {0, 0, 0, 1}
-        mMultiplyVectorR(pVert[i], matWorld, TablePack(StringUnpack(vertPackS, loadedMeshes[sceneMesh.mesh].vert[i])))
+        mMultiplyVectorR(pVert[i], matWorld, TablePack(StringUnpack(vertPackS, meshRef.vert[i])))
         mMultiplyVectorR(vsVert[i], matView, pVert[i])
     end
 
     -- Then use projected vertices to construct and 
-    local meshRef = loadedMeshes[sceneMesh.mesh]
-    local vInd, uInd
     for i = 1, loadedMeshes[sceneMesh.mesh].triCount do
         projectionStart = GetCPUTime()
 

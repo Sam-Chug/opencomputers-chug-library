@@ -955,7 +955,7 @@ local function drawSceneMeshes(matView, sceneMesh)
     local vsVert = {}
     for i = 1, meshRef.vertCount do
         pVert[i], vsVert[i] = {0, 0, 0, 1}, {0, 0, 0, 1}
-        mMultiplyVectorR(pVert[i], matWorld, TablePack(StringUnpack(vertPackS, meshRef.vert[i])))
+        mMultiplyVectorR(pVert[i], matWorld, {StringUnpack(vertPackS, meshRef.vert[i])})
         mMultiplyVectorR(vsVert[i], matView, pVert[i])
     end
 
@@ -996,9 +996,9 @@ local function drawSceneMeshes(matView, sceneMesh)
                     {vsVert[vInd[1]],
                      vsVert[vInd[2]],
                      vsVert[vInd[3]]},
-                    {TablePack(StringUnpack(uvPackS, meshRef.uv[uInd[1]])),
-                     TablePack(StringUnpack(uvPackS, meshRef.uv[uInd[2]])),
-                     TablePack(StringUnpack(uvPackS, meshRef.uv[uInd[3]]))}
+                    {{StringUnpack(uvPackS, meshRef.uv[uInd[1]])},
+                     {StringUnpack(uvPackS, meshRef.uv[uInd[2]])},
+                     {StringUnpack(uvPackS, meshRef.uv[uInd[3]])}}
                 })
             else
                 -- Otherwise, skip clip
@@ -1007,9 +1007,9 @@ local function drawSceneMeshes(matView, sceneMesh)
                     {vsVert[vInd[1]],
                      vsVert[vInd[2]],
                      vsVert[vInd[3]]},
-                    {TablePack(StringUnpack(uvPackS, meshRef.uv[uInd[1]])),
-                     TablePack(StringUnpack(uvPackS, meshRef.uv[uInd[2]])),
-                     TablePack(StringUnpack(uvPackS, meshRef.uv[uInd[3]]))}
+                    {{StringUnpack(uvPackS, meshRef.uv[uInd[1]])},
+                     {StringUnpack(uvPackS, meshRef.uv[uInd[2]])},
+                     {StringUnpack(uvPackS, meshRef.uv[uInd[3]])}}
                 }
             end
 

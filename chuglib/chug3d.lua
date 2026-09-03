@@ -83,6 +83,7 @@ local GetGreyscaleColor, GetShadedColor, BlendColor = gpu.GetGreyscaleColor, gpu
 local ColorFromRGB1 = gpu.ClosestValidHexFromRGB1
 
 local TInsert = table.insert; local TRemove = table.remove
+local TablePack, TableUnpack, StringPack, StringUnpack = table.pack, table.unpack, string.pack, string.unpack
 
 -- ============================================================
 -- DEFAULT TEXTURES & MODELS
@@ -122,6 +123,7 @@ end
 
 local vertPackS = "fffB"
 local uvPackS = "ffB"
+local indPackS = "I2I2I2"
 
 -- Load .obj from file at filenam, parse vertex/face data and build a list of triangles from it
 -- Hamfisted to work with both importing a file and a mesh string
@@ -148,7 +150,7 @@ local function getMeshFromString(filename, meshData, loadFile)
 
         -- Vertex position
         if data[1] == "v" then
-            TInsert(verts, string.pack(vertPackS, tonumber(data[2]), tonumber(data[3]), tonumber(data[4]), 1))
+            TInsert(verts, StringPack(vertPackS, tonumber(data[2]), tonumber(data[3]), tonumber(data[4]), 1))
 
         -- TODO: Vertex normals, could do shading eventually
         elseif data[1] == "vn" then
@@ -157,7 +159,7 @@ local function getMeshFromString(filename, meshData, loadFile)
         -- UVs
         elseif data[1] == "vt" then
             hasUvs = true
-            TInsert(uvs, string.pack(uvPackS, tonumber(data[2]), tonumber(data[3]), 1))
+            TInsert(uvs, StringPack(uvPackS, tonumber(data[2]), tonumber(data[3]), 1))
 
         -- Face data
         elseif data[1] == "f" then
@@ -170,32 +172,32 @@ local function getMeshFromString(filename, meshData, loadFile)
                 -- Vertex/UV
 
                 pointData = {}
-                for i = 1, 3 do
-                    for item in data[1 + i]:gmatch("%d+") do
+                for j = 1, 3 do
+                    for item in data[1 + j]:gmatch("%d+") do
                         TInsert(pointData, tonumber(item))
                     end
                 end
 
-                TInsert(vInd, {pointData[1], pointData[3], pointData[5]})
-                TInsert(uInd, {pointData[2], pointData[4], pointData[6]})
+                TInsert(vInd, StringPack(indPackS, pointData[1], pointData[3], pointData[5]))
+                TInsert(uInd, StringPack(indPackS, pointData[2], pointData[4], pointData[6]))
 
             elseif parts == 2 then
                 -- Vertex/UV/Vertex-Normal
 
                 pointData = {}
-                for i = 1, 3 do
-                    for item in data[1 + i]:gmatch("%d+") do
+                for j = 1, 3 do
+                    for item in data[1 + j]:gmatch("%d+") do
                         TInsert(pointData, tonumber(item))
                     end
                 end
 
-                TInsert(vInd, {pointData[1], pointData[4], pointData[7]})
-                TInsert(uInd, {pointData[2], pointData[5], pointData[8]})
+                TInsert(vInd, StringPack(indPackS, pointData[1], pointData[4], pointData[7]))
+                TInsert(uInd, StringPack(indPackS, pointData[2], pointData[5], pointData[8]))
 
             -- Otherwise, just grab the verts
             else
-                TInsert(vInd, {tonumber(data[2]), tonumber(data[3]), tonumber(data[4])})
-                TInsert(uInd, {1, 2, 3})
+                TInsert(vInd, StringPack(indPackS, tonumber(data[2]), tonumber(data[3]), tonumber(data[4])))
+                TInsert(uInd, StringPack(indPackS, 1, 2, 3))
             end
         end
         data, lines[i] = nil, nil
@@ -203,7 +205,7 @@ local function getMeshFromString(filename, meshData, loadFile)
     end
     -- If no UVs loaded, then make a list of dummy coordinates to index into
     if not hasUvs then
-        uvs = {string.pack(uvPackS, 0, 0, 1), string.pack(uvPackS, 0, 1, 1), string.pack(uvPackS, 1, 1, 1)}
+        uvs = {StringPack(uvPackS, 0, 0, 1), StringPack(uvPackS, 0, 1, 1), StringPack(uvPackS, 1, 1, 1)}
     end
     pointData = nil
     return verts, uvs, vInd, uInd
@@ -946,23 +948,28 @@ local function rasterizeMesh(matView, sceneMesh)
     local vsVert = {}
     for i = 1, loadedMeshes[sceneMesh.mesh].vertCount do
         pVert[i], vsVert[i] = {0, 0, 0, 1}, {0, 0, 0, 1}
-        mMultiplyVectorR(pVert[i], matWorld, table.pack(string.unpack(vertPackS, loadedMeshes[sceneMesh.mesh].vert[i])))
+        mMultiplyVectorR(pVert[i], matWorld, TablePack(StringUnpack(vertPackS, loadedMeshes[sceneMesh.mesh].vert[i])))
         mMultiplyVectorR(vsVert[i], matView, pVert[i])
     end
 
     -- Then use projected vertices to construct and 
     local meshRef = loadedMeshes[sceneMesh.mesh]
+    local vInd, uInd
     for i = 1, loadedMeshes[sceneMesh.mesh].triCount do
         projectionStart = GetCPUTime()
 
+        -- Unpack vertex and uv indices
+        vInd = TablePack(StringUnpack(indPackS, meshRef.vInd[i]))
+        uInd = TablePack(StringUnpack(indPackS, meshRef.uInd[i]))
+
         -- Get face normal
-        line1 = vSub(pVert[meshRef.vInd[i][2]], pVert[meshRef.vInd[i][1]])
-        line2 = vSub(pVert[meshRef.vInd[i][3]], pVert[meshRef.vInd[i][1]])
+        line1 = vSub(pVert[vInd[2]], pVert[vInd[1]])
+        line2 = vSub(pVert[vInd[3]], pVert[vInd[1]])
         normal = vCrossProduct(line1, line2)
         normal = vNormalize(normal)
 
         -- Compare face normal against camera normal for backface culling
-        local vCameraRay = vSub(pVert[meshRef.vInd[i][1]], vCamera)
+        local vCameraRay = vSub(pVert[vInd[1]], vCamera)
         local normalToCamera = vDotProduct(normal, vCameraRay)
 
         projCumulative = projCumulative + (GetCPUTime() - projectionStart)
@@ -975,29 +982,29 @@ local function rasterizeMesh(matView, sceneMesh)
             if drawNormalColor then tColor = getColorFromNormal(normal) end
 
             -- Check if triangle needs to be near-plane clipped
-            if vsVert[meshRef.vInd[i][1]][3] < fNear or
-               vsVert[meshRef.vInd[i][2]][3] < fNear or
-               vsVert[meshRef.vInd[i][3]][3] < fNear then
+            if vsVert[vInd[1]][3] < fNear or
+               vsVert[vInd[2]][3] < fNear or
+               vsVert[vInd[3]][3] < fNear then
 
                 -- If so, clip it
                 nPClipped, pClipped[1], pClipped[2] = triClipPlane(nearDP, nearNormal, {
-                    {vsVert[meshRef.vInd[i][1]],
-                     vsVert[meshRef.vInd[i][2]],
-                     vsVert[meshRef.vInd[i][3]]},
-                    {table.pack(string.unpack(uvPackS, meshRef.uv[meshRef.uInd[i][1]])),
-                     table.pack(string.unpack(uvPackS, meshRef.uv[meshRef.uInd[i][2]])),
-                     table.pack(string.unpack(uvPackS, meshRef.uv[meshRef.uInd[i][3]]))}
+                    {vsVert[vInd[1]],
+                     vsVert[vInd[2]],
+                     vsVert[vInd[3]]},
+                    {TablePack(StringUnpack(uvPackS, meshRef.uv[uInd[1]])),
+                     TablePack(StringUnpack(uvPackS, meshRef.uv[uInd[2]])),
+                     TablePack(StringUnpack(uvPackS, meshRef.uv[uInd[3]]))}
                 })
             else
                 -- Otherwise, skip clip
                 nPClipped = 1
                 pClipped[1] = {
-                    {vsVert[meshRef.vInd[i][1]],
-                     vsVert[meshRef.vInd[i][2]],
-                     vsVert[meshRef.vInd[i][3]]},
-                    {table.pack(string.unpack(uvPackS, meshRef.uv[meshRef.uInd[i][1]])),
-                     table.pack(string.unpack(uvPackS, meshRef.uv[meshRef.uInd[i][2]])),
-                     table.pack(string.unpack(uvPackS, meshRef.uv[meshRef.uInd[i][3]]))}
+                    {vsVert[vInd[1]],
+                     vsVert[vInd[2]],
+                     vsVert[vInd[3]]},
+                    {TablePack(StringUnpack(uvPackS, meshRef.uv[uInd[1]])),
+                     TablePack(StringUnpack(uvPackS, meshRef.uv[uInd[2]])),
+                     TablePack(StringUnpack(uvPackS, meshRef.uv[uInd[3]]))}
                 }
             end
 

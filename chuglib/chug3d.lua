@@ -178,8 +178,10 @@ local function getMeshFromString(filename, meshData, loadFile)
                     end
                 end
 
-                TInsert(vInd, StringPack(indPackS, pointData[1], pointData[3], pointData[5]))
-                TInsert(uInd, StringPack(indPackS, pointData[2], pointData[4], pointData[6]))
+                TInsert(vInd, {pointData[1], pointData[3], pointData[5]})
+                TInsert(uInd, {pointData[2], pointData[4], pointData[6]})
+                -- TInsert(vInd, StringPack(indPackS, pointData[1], pointData[3], pointData[5]))
+                -- TInsert(uInd, StringPack(indPackS, pointData[2], pointData[4], pointData[6]))
 
             elseif parts == 2 then
                 -- Vertex/UV/Vertex-Normal
@@ -191,13 +193,17 @@ local function getMeshFromString(filename, meshData, loadFile)
                     end
                 end
 
-                TInsert(vInd, StringPack(indPackS, pointData[1], pointData[4], pointData[7]))
-                TInsert(uInd, StringPack(indPackS, pointData[2], pointData[5], pointData[8]))
+                TInsert(vInd, {pointData[1], pointData[4], pointData[7]})
+                TInsert(uInd, {pointData[2], pointData[5], pointData[8]})
+                -- TInsert(vInd, StringPack(indPackS, pointData[1], pointData[4], pointData[7]))
+                -- TInsert(uInd, StringPack(indPackS, pointData[2], pointData[5], pointData[8]))
 
             -- Otherwise, just grab the verts
             else
-                TInsert(vInd, StringPack(indPackS, tonumber(data[2]), tonumber(data[3]), tonumber(data[4])))
-                TInsert(uInd, StringPack(indPackS, 1, 2, 3))
+                TInsert(vInd, {tonumber(data[2]), tonumber(data[3]), tonumber(data[4])})
+                TInsert(uInd, {1, 2, 3})
+                -- TInsert(vInd, StringPack(indPackS, tonumber(data[2]), tonumber(data[3]), tonumber(data[4])))
+                -- TInsert(uInd, StringPack(indPackS, 1, 2, 3))
             end
         end
         data, lines[i] = nil, nil
@@ -962,8 +968,8 @@ local function rasterizeMesh(matView, sceneMesh)
         projectionStart = GetCPUTime()
 
         -- Unpack vertex and uv indices
-        vInd = TablePack(StringUnpack(indPackS, meshRef.vInd[i]))
-        uInd = TablePack(StringUnpack(indPackS, meshRef.uInd[i]))
+        vInd = meshRef.vInd[i]
+        uInd = meshRef.uInd[i]
 
         -- Get face normal
         line1 = vSub(pVert[vInd[2]], pVert[vInd[1]])

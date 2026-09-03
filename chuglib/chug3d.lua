@@ -553,7 +553,7 @@ local function loadSceneMeshes()
     else
         modelFile = "default-cube-fallback"
         loadedMeshes[1] = {vert = {}, uv = {}, vInd = {}, uInd = {}, tex = 1}
-        loadedMeshes[1].verts, loadedMeshes[1].uvs, loadedMeshes[1].vInd, loadedMeshes[1].uInd = getMeshFromString(nil, defaultCubeOBJ, false)
+        loadedMeshes[1].vert, loadedMeshes[1].uv, loadedMeshes[1].vInd, loadedMeshes[1].uInd = getMeshFromString(nil, defaultCubeOBJ, false)
     end
 
     -- Get tricount
@@ -948,14 +948,14 @@ local function rasterizeMesh(matView, sceneMesh)
     local vInd, uInd
     local pVert = {}
     local vsVert = {}
-    for i = 1, loadedMeshes[sceneMesh.mesh].vertCount do
+    for i = 1, meshRef.vertCount do
         pVert[i], vsVert[i] = {0, 0, 0, 1}, {0, 0, 0, 1}
         mMultiplyVectorR(pVert[i], matWorld, TablePack(StringUnpack(vertPackS, meshRef.vert[i])))
         mMultiplyVectorR(vsVert[i], matView, pVert[i])
     end
 
     -- Then use projected vertices to construct and 
-    for i = 1, loadedMeshes[sceneMesh.mesh].triCount do
+    for i = 1, meshRef.triCount do
         projectionStart = GetCPUTime()
 
         -- Unpack vertex and uv indices

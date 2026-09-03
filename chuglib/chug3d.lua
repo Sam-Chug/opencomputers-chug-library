@@ -231,9 +231,25 @@ local function vSub(v1, v2)
     return {v1[1] - v2[1], v1[2] - v2[2], v1[3] - v2[3], 1}
 end
 
+-- Subtract one vector from another and store it in reference table r
+local function vSubR(r, v1, v2)
+    r[1] = v1[1] - v2[1]
+    r[2] = v1[2] - v2[2]
+    r[3] = v1[3] - v2[3]
+    r[4] = 1
+end
+
 -- Multiply vector by a value K
 local function vMul(v1, k)
     return {v1[1] * k, v1[2] * k, v1[3] * k, 1}
+end
+
+-- Multiply vector by a value K and set it in reference table r
+local function vMulR(r, v1, k)
+    r[1] = v1[1] * k
+    r[2] = v1[2] * k
+    r[3] = v1[3] * k
+    r[4] = 1
 end
 
 -- Divide vector v1 by a value K
@@ -251,6 +267,11 @@ end
 -- Get dot product of two input vectors
 local function vDotProduct(v1, v2)
     return v1[1] * v2[1] + v1[2] * v2[2] + v1[3] * v2[3]
+end
+
+-- Get dot product of two input vectors and put it in reference r
+local function vDotProductR(r, v1, v2)
+    r = v1[1] * v2[1] + v1[2] * v2[2] + v1[3] * v2[3]
 end
 
 -- Normalize vector
@@ -276,12 +297,20 @@ local function vCrossProduct(v1, v2)
     return v
 end
 
+-- Get cross product and put it in reference table r
+local function vCrossProductR(r, v1, v2)
+    r[1] = v1[2] * v2[3] - v1[3] * v2[2]
+    r[2] = v1[3] * v2[1] - v1[1] * v2[3]
+    r[3] = v1[1] * v2[2] - v1[2] * v2[1]
+    r[4] = 1
+end
+
 -- Get position at which vector intersects plane
 local lineStartToEnd, lineToIntersect = {0, 0, 0, 0}, {0, 0, 0, 0}
 local function vIntersectPlane(planeDP, ad, bd, lineStart, lineEnd)
     local t = (planeDP - ad) / (bd - ad)
-    lineStartToEnd = vSub(lineEnd, lineStart)
-    lineToIntersect = vMul(lineStartToEnd, t)
+    vSubR(lineStartToEnd, lineEnd, lineStart)
+    vMulR(lineToIntersect, lineStartToEnd, t)
     return vAdd(lineStart, lineToIntersect), t
 end
 
@@ -931,7 +960,6 @@ end
 -- Project verts, and then triangles from loaded mesh data
 -- Each triangle gets sent into the rasterizer
 local function drawSceneMeshes(matView, sceneMesh)
-
     projectionStart = GetCPUTime()
 
     -- Rotate mesh in scene
@@ -967,13 +995,13 @@ local function drawSceneMeshes(matView, sceneMesh)
         uInd = meshRef.uInd[i]
 
         -- Get face normal
-        line1 = vSub(pVert[vInd[2]], pVert[vInd[1]])
-        line2 = vSub(pVert[vInd[3]], pVert[vInd[1]])
-        fNormal = vCrossProduct(line1, line2)
+        vSubR(line1, pVert[vInd[2]], pVert[vInd[1]])
+        vSubR(line2, pVert[vInd[3]], pVert[vInd[1]])
+        vCrossProductR(fNormal, line1, line2)
         vNormalizeR(fNormal)
 
         -- Compare face normal against camera normal for backface culling
-        vCameraRay = vSub(pVert[vInd[1]], vCamera)
+        vSubR(vCameraRay, pVert[vInd[1]], vCamera)
         normalToCamera = vDotProduct(fNormal, vCameraRay)
 
         if normalToCamera < bfcThreshold then

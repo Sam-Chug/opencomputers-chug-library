@@ -34,6 +34,7 @@ local drawFlatShade = false             -- Draw greyscale flat-filled triangle w
 local drawWireFrame = false             -- Draw wireframe of mesh
 local drawDepthBlend = false            -- Blend the render into the background using depth buffer values
 local doUserControl = true              -- Render the scene with/without user control, affects performance greatly
+local drawBarycentricShading = false
 
 -- Rendering fluff
 local backgroundColor = 0x00DBFF        -- Color of the background in the scene
@@ -80,7 +81,7 @@ local ClearScreen, UpdateScreen = gpu.ClearScreen, gpu.UpdateScreen
 local SetText, SetPixel = gpu.SetText, gpu.SetPixel
 local DrawTriangle = gpu.DrawTriangle
 local GetGreyscaleColor, GetShadedColor, BlendColor = gpu.GetGreyscaleColor, gpu.GetShadedColor, gpu.BlendColor
-local ColorFromRGB1 = gpu.ClosestValidHexFromRGB1
+local ColorFromRGB1, ColorFromRGB8 = gpu.ClosestValidHexFromRGB1, gpu.ClosestValidHexFromRGB8
 
 local TInsert = table.insert; local TRemove = table.remove
 local TablePack, TableUnpack, StringPack, StringUnpack, StringFormat = table.pack, table.unpack, string.pack, string.unpack, string.format
@@ -636,6 +637,27 @@ local function getUVCoordinateColor(u, v)
     return min(max(uColor + vColor, 0), 0xFFFFFF)
 end
 
+local function edgeCross(a, b, p)
+    local ab = {b[1] - a[1], b[2] - a[2]}
+    local ap = {p[1] - a[1], p[2] - a[2]}
+    return ab[1] * ap[2] - ab[2] * ap[1]
+end
+
+local function barycentricShade(x, y, p1, p2, p3)
+    local area = edgeCross(p1, p2, p3)
+
+    local p = {x, y}
+    local w1 = edgeCross(p2, p3, p)
+    local w2 = edgeCross(p3, p1, p)
+    local w3 = edgeCross(p1, p2, p)
+
+    local r = ((w1 / area) * 255) // 1
+    local g = ((w2 / area) * 255) // 1
+    local b = ((w3 / area) * 255) // 1
+
+    return ColorFromRGB8(r, g, b)
+end
+
 -- Get color from xyz value of face normal
 local function getColorFromNormal(normal)
     -- Offset it for prettier colors
@@ -665,6 +687,10 @@ local function drawTexturedTriangle(x, y, tri, texU, texV, texW)
     -- Greyscale depth buffer
     if drawDepthBuffer then
         SetPixel(x, y, GetGreyscaleColor(texW))
+
+    elseif drawBarycentricShading then
+        local sampleColor = barycentricShade(x, y, tri[1][1], tri[1][2], tri[1][3])
+        SetPixel(x, y, sampleColor)
 
     -- Blend texture color into the background
     elseif drawDepthBlend then

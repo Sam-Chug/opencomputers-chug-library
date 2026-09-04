@@ -39,7 +39,6 @@ local drawBarycentricShading = false
 -- Rendering fluff
 local backgroundColor = 0x00DBFF        -- Color of the background in the scene
 local depthFadeDist = 0.4               -- Square depth value by this value when blending colors into the background
-local bfcThreshold = 0.0                -- Cull any face whos dot product against camera normal is above this
 local lightDirection = {0.1, 0.1, -1}   -- [Sunlight-ish](0.3, 1, 0) | [Topdown-ish](0.1, 0.1, -1)
 local shadeMaximum = 5 / 16             -- Maximum darkness in the most shaded areas
 local lightBias = 0.3                   -- Softens faces that are 90 degrees offset to light direction
@@ -767,19 +766,15 @@ local function rasterizeTriangle(p, u, tri)
     local dw2 = u[3][3] - u[1][3]
 
     local texU, texV, texW = 0, 0, 0
-    local daxStep, dbxStep = 0, 0
-    local du1Step, du2Step = 0, 0
-    local dv1Step, dv2Step = 0, 0
-    local dw1Step, dw2Step = 0, 0
 
-    daxStep = dx1 / abs(dy1)
-    dbxStep = dx2 / abs(dy2)
-    du1Step = du1 / abs(dy1)
-    dv1Step = dv1 / abs(dy1)
-    dw1Step = dw1 / abs(dy1)
-    du2Step = du2 / abs(dy2)
-    dv2Step = dv2 / abs(dy2)
-    dw2Step = dw2 / abs(dy2)
+    local daxStep = dx1 / abs(dy1)
+    local dbxStep = dx2 / abs(dy2)
+    local du1Step = du1 / abs(dy1)
+    local dv1Step = dv1 / abs(dy1)
+    local dw1Step = dw1 / abs(dy1)
+    local du2Step = du2 / abs(dy2)
+    local dv2Step = dv2 / abs(dy2)
+    local dw2Step = dw2 / abs(dy2)
 
     for i = p[1][2], p[2][2] do
 
@@ -977,7 +972,7 @@ end
 local projectionStart, projCumulative = 0, 0
 local pClipped, nPClipped = {}, 0
 local fNormal, line1, line2 = {0, 0, 0}, {0, 0, 0}, {0, 0, 0}
-local vCameraRay, normalToCamera = {0, 0, 0, 0}, {0, 0, 0, 0}
+local vCameraRay, fNormalDP = {0, 0, 0, 0}, 0
 local vUp, vTarget = {0, 1, 0, 1}, {0, 0, 1, 1}
 
 -- Get camera rotation matrix from player control
@@ -1034,9 +1029,9 @@ local function drawSceneMesh(matView, sceneMesh)
 
         -- Compare face normal against camera normal for backface culling
         vSubR(vCameraRay, pVert[vInd[1]], vCamera)
-        normalToCamera = vDotProduct(fNormal, vCameraRay)
+        fNormalDP = vDotProduct(fNormal, vCameraRay)
 
-        if normalToCamera < bfcThreshold then
+        if fNormalDP < 0 then
 
             -- Get amount of shade relative to light normal, and find normal color if needed
             local lightDp = max(min(lightBias + vDotProduct(nLightDir, fNormal), 1), shadeMaximum)

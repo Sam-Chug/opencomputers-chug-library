@@ -185,8 +185,6 @@ local function DrawFrame()
 
             -- Mark pixel as finished updating
             ::startGroup::
-            drawBuffer[indexTop] = false
-            drawBuffer[indexBot] = false
 
             -- Get starting fill fillgroup values
             startFore, startBack, startChar, startText = returnPixelData(x + xSkipIndex, y)
@@ -519,7 +517,6 @@ local function createColorLUTs()
     for r = 0, 5 do
         for g = 0, 7 do
             for b = 0, 4 do
-
                 local hexR = r * 51
                 local hexG = (g * 36.5) // 1
                 local hexB = Min(b * 64, 255)
@@ -627,7 +624,7 @@ local function fillFlatBottomTriangle(x1, y1, x2, y2, x3, y3, color)
     local xEnd = x1
 
     for y = y1, y3 do
-        DrawLine(xStart // 1, y, xEnd // 1, y, color)
+        DrawLine((xStart + 0.5) // 1, y, (xEnd + 0.5) // 1, y, color)
         xStart = xStart + invSlope1
         xEnd = xEnd + invSlope2
     end
@@ -642,7 +639,7 @@ local function fillFlatTopTriangle(x1, y1, x2, y2, x3, y3, color)
     local xEnd = x3
 
     for y = y3, y2, -1 do
-        DrawLine(xStart // 1, y, xEnd // 1, y, color)
+        DrawLine((xStart + 0.5) // 1, y, (xEnd + 0.5) // 1, y, color)
         xStart = xStart - invSlope1
         xEnd = xEnd - invSlope2
     end
@@ -854,6 +851,9 @@ local function drawDemoGraphics(x, y, width, height)
         local radius = (funcHeight // 2) - 15
         local pi = math.pi * 2
         local pi3 = pi / 3
+
+        DrawLine(5, 5, 10, 10, 0xFFFFFF)
+        FillTriangle({{5, 10}, {5, 16}, {10, 13}}, 0xFF00FF)
 
         local p = {}
         p[1] = {center[1] + radius * math.cos(angle), center[2] + radius * math.sin(angle)}

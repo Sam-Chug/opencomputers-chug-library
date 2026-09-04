@@ -28,6 +28,7 @@ local debugMode = false
 local debugDrawWhiteLines = false
 local debugDrawColorLines = false
 local debugTestColorLUTs = false
+local debugDrawTriangle = false
 local debugDoBenchmark = false
 
 local gpuUsageStats = {
@@ -815,6 +816,7 @@ end
 
 createColorLUTs()
 local random = math.random
+local angle = 0
 -- TODO: Make separate demo functions and loop them by pressing some key
 local function drawDemoGraphics(x, y, width, height)
     ClearScreen()
@@ -857,6 +859,36 @@ local function drawDemoGraphics(x, y, width, height)
             local retestHex = hexLUT[colorIndex]
             SetPixel(xPos + 10, yPos + 10, hexValue)
             SetPixel(xPos + 10, yPos + 25, retestHex)
+        end
+    end
+
+    if debugDrawTriangle then
+        local center = {funcWidth // 2, funcHeight // 2}
+        local radius = (funcHeight // 2) - 15
+        local pi = math.pi * 2
+        local pi3 = pi / 3
+
+        local p = {}
+        p[1] = {center[1] + radius * math.cos(angle), center[2] + radius * math.sin(angle)}
+        p[2] = {center[1] + radius * math.cos(angle + pi3), center[2] + radius * math.sin(angle + pi3)}
+        p[3] = {center[1] + radius * math.cos(angle + (pi3 * 2)), center[2] + radius * math.sin(angle + (pi3 * 2))}
+        FillTriangle(p, 0xFF00FF)
+        DrawTriangle(p, 0xFFFFFF)
+
+        local colors = {0xFF0000, 0x00FF00, 0x0000FF}
+        for i = 1, 3 do
+            local subRadius = 10
+            local subP = {}
+            subP[1] = {p[i][1] + subRadius * math.cos(-angle), p[i][2] + subRadius * math.sin(-angle)}
+            subP[2] = {p[i][1] + subRadius * math.cos(-angle + pi3), p[i][2] + subRadius * math.sin(-angle + pi3)}
+            subP[3] = {p[i][1] + subRadius * math.cos(-angle + (pi3 * 2)), p[i][2] + subRadius * math.sin(-angle + (pi3 * 2))}
+            FillTriangle(subP, colors[i])
+            DrawTriangle(subP, 0xFFFFFF)
+        end
+
+        angle = angle + 0.1
+        if angle >= pi then
+            angle = 0
         end
     end
 end
@@ -946,6 +978,7 @@ local function setVariables()
     if ops.w then debugDrawWhiteLines = true end
     if ops.c then debugDrawColorLines = true end
     if ops.b then debugDoBenchmark = true end
+    if ops.t then debugDrawTriangle = true end
     if ops.p then
         debugTestColorLUTs = true
         createColorLUTs()

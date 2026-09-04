@@ -30,7 +30,7 @@ local doDrawTextured = true             -- TODO: There is no real setting for th
 local drawNormalColor = false           -- Flat-fill triangle with the RGB color of its face normal XYZ
 local drawDepthBuffer = false           -- Draw depth value at each pixel of each triangle
 local drawShaded = false                -- Shade based on triangle face normal relation to light direction
-local drawFlatShade = false             -- Draw greyscale flat-filled triangle with lighting based on light direction
+local drawGreyScale = false             -- Draw greyscale flat-filled triangle with lighting based on light direction
 local drawWireFrame = false             -- Draw wireframe of mesh
 local drawDepthBlend = false            -- Blend the render into the background using depth buffer values
 local doUserControl = true              -- Render the scene with/without user control, affects performance greatly
@@ -63,7 +63,7 @@ local function setUserOptions()
     if ops.d then drawDepthBuffer = true end
     if ops.s then drawShaded = true end
     if ops.b then drawDepthBlend = true end
-    if ops.f then drawFlatShade = true end
+    if ops.f then drawGreyScale = true end
     if ops.w then drawWireFrame = true end
 end
 setUserOptions()
@@ -703,7 +703,7 @@ local function buildRenderPipeline()
             SetPixel(x, y, tri[4])
         end)
     -- Flat-shade triangles based on their face orientation to the light direction in greyscale
-    elseif drawFlatShade then
+    elseif drawGreyScale then
         return (function(x, y, tri, texU, texV, texW)
             SetPixel(x, y, GetGreyscaleColor(tri[5]))
         end)
@@ -719,6 +719,32 @@ local function buildRenderPipeline()
             SetPixel(x, y, uvSampleTexture(texU / texW, texV / texW, tri[3]))
         end)
     end
+end
+
+-- Change setting during runtime
+local function changeSetting(setting, value)
+    if setting == "draw-texture" then
+        doDrawTextured = value
+    elseif setting == "draw-normal-color" then
+        drawNormalColor = value
+    elseif setting == "draw-depth-buffer" then
+        drawDepthBuffer = value
+    elseif setting == "draw-shade" then
+        drawShaded = value
+    elseif setting == "draw-greyscale" then
+        drawGreyScale = value
+    elseif setting == "draw-wireframe" then
+        drawWireFrame = value
+    elseif setting == "draw-depth-blend" then
+        drawDepthBlend = value
+    elseif setting == "allow-user-control" then
+        doUserControl = value
+    elseif setting == "draw-barycentric-rgb" then
+        drawBarycentricShading = value
+    end
+
+    -- Update render pipeline
+    buildRenderPipeline()
 end
 
 -- ============================================================

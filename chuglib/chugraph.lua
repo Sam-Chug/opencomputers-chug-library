@@ -52,13 +52,12 @@ local GPUSet, GPUFill, GPUBitBlt
 -- GET/SET PIXEL DATA
 -- ============================================================
 
--- TODO: Merge with GetPixel()
-local function unpackPixel(x, y)
+local function getPixelData(x, y)
     local index = y * funcWidth + x
     return colorBuffer[index] >> 24, colorBuffer[index] % 16777216, charBuffer[index], drawBuffer[index]
 end
 
-local function packPixel(x, y, fore, back, char, update)
+local function updateBuffer(x, y, fore, back, char, update)
     gpuUsageStats.pack = gpuUsageStats.pack + 1
     local index = y * funcWidth + x
     colorBuffer[index] = (fore << 24) + (back or 0x000000)
@@ -294,6 +293,13 @@ local function DrawFrame()
                 if xSkipIndex + x > funcWidth then break end
             end
 
+            -- TODO: New table for this:
+            -- Check if foreground color already exists in array
+            -- If it does, set data into that array index
+            -- Otherwise, set new array index, n + 1
+                -- Save new color into a lookup table, index -> hex color
+            -- Back color follows the same structure inside the array, as a second array
+
             -- Add grouped pixels to list
             if drawGroup[fillGroup[3]] == nil then drawGroup[fillGroup[3]] = {} end
             if drawGroup[fillGroup[3]][fillGroup[4]] == nil then
@@ -319,16 +325,6 @@ end
 -- GET/SET
 -- ============================================================
 
--- Set index to input pixel data
-local function addToFrameBuffer(x, y, foreColor, backColor, char)
-
-    x = x // 1; y = y // 1
-    if x < 1 or x > funcWidth or y < 1 or y > funcHeight then return end
-
-    -- Set pixel data from function args
-    packPixel(x, y, foreColor, backColor, char, true)
-end
-
 -- Set index and consecutive indices to string pixel data
 local function textToFrameBuffer(x, y, foreColor, backColor, text, vertical)
 
@@ -337,11 +333,11 @@ local function textToFrameBuffer(x, y, foreColor, backColor, text, vertical)
 
     if not vertical then
         for i = 1, string.len(text) do
-            addToFrameBuffer(x + i - 1, y, foreColor, backColor, Sub(text, i, i))
+            updateBuffer(x + i - 1, y, foreColor, backColor, Sub(text, i, i), true)
         end
     else
         for i = 1, string.len(text) do
-            addToFrameBuffer(x, y + i - 1, foreColor, backColor, Sub(text, i, i))
+            updateBuffer(x, y + i - 1, foreColor, backColor, Sub(text, i, i), true)
         end
     end
 end
@@ -351,7 +347,7 @@ end
 local function Fill(x, y, width, height, foreColor, backColor)
     for i = x, x + width - 1 do
         for j = y, y + height - 1 do
-            addToFrameBuffer(i, j, foreColor, backColor)
+            updateBuffer(i, j, foreColor, backColor, nil, true)
         end
     end
 end
@@ -376,7 +372,7 @@ end
 
 -- Return pixel data
 local function GetPixel(x, y)
-    local fore, back, char = unpackPixel(x, y)
+    local fore, back, char = getPixelData(x, y)
     return char or nil, fore, back
 end
 
@@ -394,7 +390,7 @@ local function SetPixel(x, y, color)
     if x < 1 or x > funcWidth or y < 1 or y > funcHeight then return end
 
     -- Set pixel data from function args
-    packPixel(x, y, color, nil, nil, true)
+    updateBuffer(x, y, color, nil, nil, true)
 end
 
 local function GetAspectRatio()

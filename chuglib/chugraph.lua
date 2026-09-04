@@ -193,8 +193,8 @@ local function DrawFrame()
 
             -- Start fill group
             fillGroup = {x + xSkipIndex, (y // yInc) + 1, startFore, startBack}
-            charString = {startChar}; charsAdded = 1; twoColCheck = false
-            while true do -- loop until non-matching pixel found
+            charString = {startChar}; charsAdded = 1
+            while xSkipIndex + x + 1 <= funcWidth do -- loop until non-matching pixel found
 
                 -- Get next pixel in row
                 checkLen = charsAdded
@@ -203,6 +203,19 @@ local function DrawFrame()
 
                 -- If pixel's text state changes, break
                 if startText ~= newText then break end
+
+                -- Colors different, sort colors by numerical value. If need to swap, inverse characters in string
+                -- Disabled for now, I don't think this helps performance much
+                -- if (not twoColCheck) and (fillGroup[3] ~= fillGroup[4]) and (not startText) then
+                --     if fillGroup[3] < fillGroup[4] then
+                --         for i = 1, charsAdded do
+                --             charString[i] = inverseChars[charString[i]]
+                --         end
+                --         fillGroup[3], fillGroup[4] = fillGroup[4], fillGroup[3]
+                --         gpuUsageStats.invert = gpuUsageStats.invert + 1
+                --     end
+                --     twoColCheck = true
+                -- end
 
                 -- If new fore/back are the same
                 if newFore ~= newBack then
@@ -231,8 +244,7 @@ local function DrawFrame()
                             charString[charsAdded] = inverseChars[newChar]
                             fillGroup[4] = newFore
                         end
-                    else break end
-
+                    end
                 -- If new fore/back are not the same
                 else
 
@@ -266,31 +278,10 @@ local function DrawFrame()
                 end
 
                 -- If no new chars added to draw string, exit loop
-                if charsAdded == checkLen then
-                    break
-
-                -- Else, pixel is ready to draw and no longer requires updating
-                else
-                    drawBuffer[indexTop + 1] = false
-                    drawBuffer[indexBot + 1] = false
-                end
-
-                -- Colors different, sort colors by numerical value
-                -- If need to swap, inverse characters in string
-                if (not twoColCheck) and (fillGroup[3] ~= fillGroup[4]) and (not startText) then
-                    if fillGroup[3] < fillGroup[4] then
-                        for i = 1, charsAdded do
-                            charString[i] = inverseChars[charString[i]]
-                        end
-                        fillGroup[3], fillGroup[4] = fillGroup[4], fillGroup[3]
-                        gpuUsageStats.invert = gpuUsageStats.invert + 1
-                    end
-                    twoColCheck = true
-                end
+                if charsAdded == checkLen then break end
 
                 -- Increment x search index
                 xSkipIndex = xSkipIndex + 1
-                if xSkipIndex + x > funcWidth then break end
             end
 
             -- TODO: New table for this:

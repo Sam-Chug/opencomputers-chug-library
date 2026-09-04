@@ -1192,9 +1192,9 @@ local function updateElapsedTime()
 end
 
 local KEY_FORWARD, KEY_LEFT, KEY_BACKWARD, KEY_RIGHT = "W", "A", "S", "D"
-local KEY_UP, KEY_DOWN, KEY_QUIT = "Z", "X", "Q"
+local KEY_UP, KEY_DOWN, KEY_QUIT, KEY_WIREFRAME = "Z", "X", "Q", "P"
 local KEY_TURNLEFT, KEY_TURNRIGHT, KEY_TURNUP, KEY_TURNDOWN = "LEFT", "RIGHT", "UP", "DOWN"
-local moveSpeed = 3
+local moveSpeed, keyCooldown = 3, 0
 local function applyInputControls()
 
     -- Apply values based on keypress
@@ -1236,6 +1236,13 @@ local function applyInputControls()
     if inputManager.isKeyDown(inputManager, KEY_TURNDOWN) then
         fPitch = fPitch + (2 * elapsedTime)
     end
+    if keyCooldown == 0 then
+        if inputManager.isKeyDown(inputManager, KEY_WIREFRAME) then
+            changeSetting("draw-wireframe", not drawWireFrame)
+            keyCooldown = 10
+        end
+    end
+    keyCooldown = max(keyCooldown - 1, 0)
 end
 
 -- ============================================================

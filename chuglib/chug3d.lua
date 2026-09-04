@@ -73,7 +73,7 @@ setUserOptions()
 -- ============================================================
 
 local cos, sin, tan = math.cos, math.sin, math.tan
-local min, max, abs, modulo = math.min, math.max, math.abs, math.fmod
+local min, max, abs = math.min, math.max, math.abs
 local GetCPUTime = os.clock
 
 local ClearScreen, UpdateScreen = gpu.ClearScreen, gpu.UpdateScreen
@@ -83,7 +83,7 @@ local GetGreyscaleColor, GetShadedColor, BlendColor = gpu.GetGreyscaleColor, gpu
 local ColorFromRGB1, ColorFromRGB8 = gpu.ClosestValidHexFromRGB1, gpu.ClosestValidHexFromRGB8
 
 local TInsert = table.insert; local TRemove = table.remove
-local TablePack, TableUnpack, StringPack, StringUnpack, StringFormat = table.pack, table.unpack, string.pack, string.unpack, string.format
+local StringPack, StringUnpack, StringFormat = string.pack, string.unpack, string.format
 
 -- ============================================================
 -- DEFAULT TEXTURES & MODELS
@@ -123,7 +123,6 @@ end
 
 local vertPackS = "fffB"    -- Pack verts, 3 floats and a byte for trailing unset "w" value
 local uvPackS = "ffB"       -- Pack uvs, 2 floats and a byte for trailing unset "w" value
-local indPackS = "I2I2I2"   -- Pack unsigned ints, was for vertex and uv indices but is not used at the moment
 
 -- Load .obj from file at filename or from string, parse vertex/face data and build a list of triangles from it
 local function getMeshFromString(filename, meshData, loadFile)
@@ -582,8 +581,6 @@ local function loadSceneMeshes(meshFilenames)
     vsBottomDP = vDotProduct({0, screenHeight, 0}, {0, -1, 0})
     nearDP = vDotProduct(nearPlane, nearNormal)
     local maximumVert = 0
-
-    -- TODO: For meshes in scene:
 
     -- From input mesh filenames, parse .objs and load them into loadedMeshes
     for i = 1, #meshFilenames do
@@ -1248,6 +1245,12 @@ end
 -- ============================================================
 -- RUN THE DAMN THING
 -- ============================================================
+
+-- TODO: Texture Loading Refactor:
+    -- Instead of searching for .bmp with the same file name ->
+        -- Load .mtl file with the same file name
+        -- Get list of .bmps to parse, then parse each and add to loadedTextures list
+        -- A look-up-table in loadedMeshes[i] now holds the texture data for each triangle
 
 -- TODO: Packaging Refactor
 -- This needs to be usable from other scripts:

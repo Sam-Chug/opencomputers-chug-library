@@ -306,6 +306,14 @@ local function vCrossProductR(r, v1, v2)
     r[4] = 1
 end
 
+-- Get cross product along edge to point
+local function edgeCross(a, b, p)
+    local ab = {b[1] - a[1], b[2] - a[2]}
+    local ap = {p[1] - a[1], p[2] - a[2]}
+    return ab[1] * ap[2] - ab[2] * ap[1]
+end
+
+
 -- Get position at which vector intersects plane
 local lineStartToEnd, lineToIntersect = {0, 0, 0, 0}, {0, 0, 0, 0}
 local function vIntersectPlane(planeDP, ad, bd, lineStart, lineEnd)
@@ -541,6 +549,7 @@ end
 local loadedMeshes = {}
 local loadedTextures = {{name = "missingTex", w = #missingTex, h = #missingTex[1], tex = missingTex}}
 local sceneMeshes = {}
+local renderTriangle
 
 local matProj, matRotY, matRotZ, matRotX
 local vCamera, vLookDir = {0, 0, 0}, {0, 0, 0}
@@ -630,19 +639,6 @@ local function resetDepthBuffer()
     depthBuffer = {}
 end
 
--- TODO: Redo with barycentric coordinates
-local function getUVCoordinateColor(u, v)
-    local uColor = ((u * 256) // 1) * 65536
-    local vColor = ((v * 256) // 1) * 256
-    return min(max(uColor + vColor, 0), 0xFFFFFF)
-end
-
-local function edgeCross(a, b, p)
-    local ab = {b[1] - a[1], b[2] - a[2]}
-    local ap = {p[1] - a[1], p[2] - a[2]}
-    return ab[1] * ap[2] - ab[2] * ap[1]
-end
-
 local function barycentricShade(x, y, p1, p2, p3)
     local area = edgeCross(p1, p2, p3)
 
@@ -679,44 +675,50 @@ local function uvSampleTexture(u, v, texIndex)
     return loadedTextures[texIndex].tex[v][u]
 end
 
--- Draw triangle based on cl args
-local function drawTexturedTriangle(x, y, tri, texU, texV, texW)
-    -- TODO: More of these should be combinable
-    -- Also should be re-ordered based on whatever is most commonly used? Or just rewritten more elegantly
+-- Return function to be used as each pixel's rendering "pipeline"
+local function buildRenderPipeline()
 
-    -- Greyscale depth buffer
+    -- Draw depth value at each pixel
     if drawDepthBuffer then
-        SetPixel(x, y, GetGreyscaleColor(texW))
-
-    -- Blend texture color into the background
+        return (function(x, y, tri, texU, texV, texW)
+            SetPixel(x, y, GetGreyscaleColor(texW))
+        end)
+    -- Blend model into the background using depth value at each pixel
     elseif drawDepthBlend then
-        local sampleColor = uvSampleTexture(texU / texW, texV / texW, tri[3])
-        if drawShaded then
-            sampleColor = GetShadedColor(sampleColor, tri[5])
-        end
-        SetPixel(x, y, BlendColor(backgroundColor, sampleColor, texW ^ depthFadeDist))
-
-    -- RGB according to surface normals
-    elseif drawNormalColor then
-        SetPixel(x, y, tri[4])
-
-    -- Shade texture based on angle to specified light source
-    elseif drawFlatShade then
-        SetPixel(x, y, GetGreyscaleColor(tri[5]))
-
-    -- Texture with shading based on per-triangle lighting
+        return (function(x, y, tri, texU, texV, texW)
+            local sampleColor = uvSampleTexture(texU / texW, texV / texW, tri[3])
+            if drawShaded then
+                sampleColor = GetShadedColor(sampleColor, tri[5])
+            end
+            SetPixel(x, y, BlendColor(backgroundColor, sampleColor, texW ^ depthFadeDist))
+        end)
+    -- Draw each triangle textured, and shaded according to it's orientation to the light direction
     elseif drawShaded then
-        local sampleColor = uvSampleTexture(texU / texW, texV / texW, tri[3])
-        SetPixel(x, y, GetShadedColor(sampleColor, tri[5]))
-
+        return (function(x, y, tri, texU, texV, texW)
+            local sampleColor = uvSampleTexture(texU / texW, texV / texW, tri[3])
+            SetPixel(x, y, GetShadedColor(sampleColor, tri[5]))
+        end)
+    -- Draw flat-colored triangles, colored based on the XYZ values of their surface normals
+    elseif drawNormalColor then
+        return (function(x, y, tri, texU, texV, texW)
+            SetPixel(x, y, tri[4])
+        end)
+    -- Flat-shade triangles based on their face orientation to the light direction in greyscale
+    elseif drawFlatShade then
+        return (function(x, y, tri, texU, texV, texW)
+            SetPixel(x, y, GetGreyscaleColor(tri[5]))
+        end)
     -- Shade pixel using barycentric coordinates in triangle
     elseif drawBarycentricShading then
-        local sampleColor = barycentricShade(x, y, tri[1][1], tri[1][2], tri[1][3])
-        SetPixel(x, y, sampleColor)
-
-    -- Just texture
+        return (function(x, y, tri, texU, texV, texW)
+            local sampleColor = barycentricShade(x, y, tri[1][1], tri[1][2], tri[1][3])
+            SetPixel(x, y, sampleColor)
+        end)
+    -- Else, just set plain texture, sampled with uv coordinates
     else
-        SetPixel(x, y, uvSampleTexture(texU / texW, texV / texW, tri[3]))
+        return (function(x, y, tri, texU, texV, texW)
+            SetPixel(x, y, uvSampleTexture(texU / texW, texV / texW, tri[3]))
+        end)
     end
 end
 
@@ -725,7 +727,7 @@ end
 -- ============================================================
 
 -- Draw projected triangle to the screen
-local function texturedTriangle(p, u, tri)
+local function rasterizeTriangle(p, u, tri)
 
     p[1][1] = p[1][1] // 1;  p[2][1] = p[2][1] // 1;  p[3][1] = p[3][1] // 1
     p[1][2] = p[1][2] // 1;  p[2][2] = p[2][2] // 1;  p[3][2] = p[3][2] // 1
@@ -819,7 +821,7 @@ local function texturedTriangle(p, u, tri)
             if depthBuffer[depthIndex] == nil or texW > depthBuffer[depthIndex] then
 
                 -- Draw pixel of triangle according to cl arg settings
-                drawTexturedTriangle(j, i, tri, texU, texV, texW)
+                renderTriangle(j, i, tri, texU, texV, texW)
                 depthBuffer[depthIndex] = texW
             end
             t = t + tStep
@@ -880,7 +882,7 @@ local function texturedTriangle(p, u, tri)
             if depthBuffer[depthIndex] == nil or texW > depthBuffer[depthIndex] then
 
                 -- Draw pixel of triangle according to cl arg settings
-                drawTexturedTriangle(j, i, tri, texU, texV, texW)
+                renderTriangle(j, i, tri, texU, texV, texW)
                 depthBuffer[depthIndex] = texW
             end
             t = t + tStep
@@ -963,7 +965,7 @@ local function viewportClipTriangle(rasterTris)
 
         -- Draw with texture
         elseif doDrawTextured then
-            texturedTriangle(rasterTris[i][1], rasterTris[i][2], rasterTris[i])
+            rasterizeTriangle(rasterTris[i][1], rasterTris[i][2], rasterTris[i])
         end
 
         -- Debug
@@ -992,7 +994,7 @@ end
 
 -- Project verts, and then triangles from loaded mesh data
 -- Each triangle gets sent into the rasterizer
-local function drawSceneMeshes(matView, sceneMesh)
+local function drawSceneMesh(matView, sceneMesh)
     projectionStart = GetCPUTime()
 
     -- Rotate mesh in scene
@@ -1238,7 +1240,7 @@ local function renderTriangles()
 
     local viewMat = getViewMatrix()
     for i = 1, #sceneMeshes do
-        drawSceneMeshes(viewMat, sceneMeshes[i])
+        drawSceneMesh(viewMat, sceneMeshes[i])
     end
 end
 
@@ -1246,6 +1248,8 @@ local function main()
     ClearScreen()
     loadSceneMeshes({modelFile})
     gpu.SetSceneBackground(backgroundColor)
+
+    renderTriangle = buildRenderPipeline()
 
     -- Force garbage collection before starting
     for i = 1, 10 do os.sleep(0) end

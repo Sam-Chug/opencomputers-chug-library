@@ -1138,8 +1138,8 @@ local function modelDebug()
 
     local sceneTris, sceneVerts = 0, 0
     for i = 1, #sceneMeshes do
-        sceneTris = sceneTris + #loadedMeshes[sceneMeshes[i].mesh].vert
-        sceneVerts = sceneVerts + #loadedMeshes[sceneMeshes[i].mesh].vInd
+        sceneTris = sceneTris + #loadedMeshes[sceneMeshes[i].mesh].vInd
+        sceneVerts = sceneVerts + #loadedMeshes[sceneMeshes[i].mesh].vert
     end
 
     gpu.Fill(1, 1, 27, 10, debugBG, debugBG)
@@ -1228,13 +1228,15 @@ end
     -- New script to demo 3d graphics in the same way as chug3d does now, with arguments and such
     -- Should work with the above instancing refactor
     -- Most of the functions in chug3d are helpers, and do not need to be accessible outside of the script
-    -- renderTriangles() becomes RenderTriangles(), and handles rendering triangles
-        -- Remove ClearScreen() from RenderTriangles()
+    -- renderScene() becomes RenderScene(), and handles rendering triangles
+        -- Remove ClearScreen() from RenderScene()
     -- Things to move:
         -- DepthBuffer should be moved to chugraph for future shader functionality
         -- SetPixelXYZ would be an example of a SetPixel that respects and sets the DepthBuffer in chugraph
+    -- Things to figure out:
+        -- How can we refer to a specific mesh in the scene?
 
-local function renderTriangles()
+local function renderScene()
     ClearScreen()
     resetDepthBuffer()
 
@@ -1266,7 +1268,7 @@ local function main()
             break
         end
 
-        renderTriangles()
+        renderScene()
         modelDebug()
         UpdateScreen()
 

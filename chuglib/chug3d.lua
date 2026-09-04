@@ -577,7 +577,7 @@ local function loadSceneMeshes(meshFilenames)
     -- Viewspace and near plane dot products for clipping triangles
     vsLeftDP = vDotProduct({1, 0, 0}, {1, 0, 0})
     vsRightDP = vDotProduct({screenWidth + 1, 0, 0}, {-1, 0, 0})
-    vsTopDP = vDotProduct({0, 0, 0}, {0, 1, 0})
+    vsTopDP = vDotProduct({0, 1, 0}, {0, 1, 0})
     vsBottomDP = vDotProduct({0, screenHeight, 0}, {0, -1, 0})
     nearDP = vDotProduct(nearPlane, nearNormal)
     local maximumVert = 0

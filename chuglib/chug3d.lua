@@ -27,7 +27,8 @@ local drawGreyScale = false             -- Draw greyscale flat-filled triangle w
 local drawWireFrame = false             -- Draw wireframe of mesh
 local drawDepthBlend = false            -- Blend the render into the background using depth buffer values
 local doUserControl = true              -- Render the scene with/without user control, affects performance greatly
-local drawBarycentricShading = false
+local drawBarycentricShading = false    -- Color polygons RGB with respect to point's barycentric coordinates
+local demoProgram = false               -- Specify if running this program should load the chug3d demo
 
 -- Rendering fluff
 local backgroundColor = 0x00DBFF        -- Color of the background in the scene
@@ -57,6 +58,7 @@ local function setUserOptions()
     if ops.b then drawDepthBlend = true end
     if ops.f then drawGreyScale = true end
     if ops.w then drawWireFrame = true end
+    if ops.t then demoProgram = true end
 end
 setUserOptions()
 
@@ -70,6 +72,7 @@ local GetCPUTime = os.clock
 
 local ClearScreen, UpdateScreen, SetText, SetPixel, DrawTriangle
 local GetGreyscaleColor, GetShadedColor, BlendColor, ColorFromRGB1, ColorFromRGB8
+local GetScreenWidth, GetScreenHeight, GetAspectRatio
 
 local TInsert = table.insert; local TRemove = table.remove
 local StringPack, StringUnpack, StringFormat = string.pack, string.unpack, string.format
@@ -559,9 +562,9 @@ local function LoadSceneMeshes(meshFilenames)
 
     -- Precalculate some commonly used variables
     nLightDir = vNormalize(lightDirection)
-    screenWidth = gpu.GetScreenWidth(); screenHeight = gpu.GetScreenHeight()
+    screenWidth = GetScreenWidth(); screenHeight = GetScreenHeight()
     halfWidth = 0.5 * screenWidth; halfHeight = 0.5 * screenHeight
-    matProj = mMakeProjection(fFov, gpu.GetAspectRatio(), fNear, fFar)
+    matProj = mMakeProjection(fFov, GetAspectRatio(), fNear, fFar)
 
     -- Viewspace and near plane dot products for clipping triangles
     vsLeftDP = vDotProduct({1, 0, 0}, {1, 0, 0})
@@ -614,7 +617,7 @@ local function LoadSceneMeshes(meshFilenames)
 end
 
 local function PlaceMeshInScene(meshIndex, parent, position, rotation)
-    sceneMeshes[1] = {mesh = meshIndex, parent = parent, children = {}, position = position, rotation = rotation}
+    table.insert(sceneMeshes, {mesh = meshIndex, parent = parent, children = {}, position = position, rotation = rotation})
 end
 
 -- ============================================================
@@ -668,12 +671,12 @@ local function RebuildRenderPipeline()
 
     -- Draw depth value at each pixel
     if drawDepthBuffer then
-        return (function(x, y, tri, texU, texV, texW)
+        renderTriangle = (function(x, y, tri, texU, texV, texW)
             SetPixel(x, y, GetGreyscaleColor(texW))
         end)
     -- Blend model into the background using depth value at each pixel
     elseif drawDepthBlend then
-        return (function(x, y, tri, texU, texV, texW)
+        renderTriangle = (function(x, y, tri, texU, texV, texW)
             local sampleColor = uvSampleTexture(texU / texW, texV / texW, tri[3])
             if drawShaded then
                 sampleColor = GetShadedColor(sampleColor, tri[5])
@@ -682,29 +685,29 @@ local function RebuildRenderPipeline()
         end)
     -- Draw each triangle textured, and shaded according to it's orientation to the light direction
     elseif drawShaded then
-        return (function(x, y, tri, texU, texV, texW)
+        renderTriangle = (function(x, y, tri, texU, texV, texW)
             local sampleColor = uvSampleTexture(texU / texW, texV / texW, tri[3])
             SetPixel(x, y, GetShadedColor(sampleColor, tri[5]))
         end)
     -- Draw flat-colored triangles, colored based on the XYZ values of their surface normals
     elseif drawNormalColor then
-        return (function(x, y, tri, texU, texV, texW)
+        renderTriangle = (function(x, y, tri, texU, texV, texW)
             SetPixel(x, y, tri[4])
         end)
     -- Flat-shade triangles based on their face orientation to the light direction in greyscale
     elseif drawGreyScale then
-        return (function(x, y, tri, texU, texV, texW)
+        renderTriangle = (function(x, y, tri, texU, texV, texW)
             SetPixel(x, y, GetGreyscaleColor(tri[5]))
         end)
     -- Shade pixel using barycentric coordinates in triangle
     elseif drawBarycentricShading then
-        return (function(x, y, tri, texU, texV, texW)
+        renderTriangle = (function(x, y, tri, texU, texV, texW)
             local sampleColor = barycentricShade(x, y, tri[1][1], tri[1][2], tri[1][3])
             SetPixel(x, y, sampleColor)
         end)
     -- Else, just set plain texture, sampled with uv coordinates
     else
-        return (function(x, y, tri, texU, texV, texW)
+        renderTriangle = (function(x, y, tri, texU, texV, texW)
             SetPixel(x, y, uvSampleTexture(texU / texW, texV / texW, tri[3]))
         end)
     end
@@ -1261,7 +1264,7 @@ end
 
 -- This is perhaps lazy but we need a reference to chugraph for things to work,
 -- And also a reference to chugraph if another library wants to use chug3d
-local function SetGPU(g)
+local function SetMainGPU(g)
     if g == nil then
         gpu = require("chugraph")
         gpu.SetMainGPU(component.gpu, "doubleHeight", true, true)
@@ -1269,11 +1272,13 @@ local function SetGPU(g)
         SetText, SetPixel, DrawTriangle = gpu.SetText, gpu.SetPixel, gpu.DrawTriangle
         GetGreyscaleColor, GetShadedColor, BlendColor = gpu.GetGreyscaleColor, gpu.GetShadedColor, gpu.BlendColor
         ColorFromRGB1, ColorFromRGB8 = gpu.ClosestValidHexFromRGB1, gpu.ClosestValidHexFromRGB8
+        GetScreenWidth, GetScreenHeight, GetAspectRatio = gpu.GetScreenWidth, gpu.GetScreenHeight, gpu.GetAspectRatio
     else
         ClearScreen, UpdateScreen = g.ClearScreen, g.UpdateScreen
         SetText, SetPixel, DrawTriangle = g.SetText, g.SetPixel, g.DrawTriangle
         GetGreyscaleColor, GetShadedColor, BlendColor = g.GetGreyscaleColor, g.GetShadedColor, g.BlendColor
         ColorFromRGB1, ColorFromRGB8 = g.ClosestValidHexFromRGB1, g.ClosestValidHexFromRGB8
+        GetScreenWidth, GetScreenHeight, GetAspectRatio = g.GetScreenWidth, g.GetScreenHeight, g.GetAspectRatio
     end
 end
 
@@ -1287,7 +1292,7 @@ end
 
 local function main()
 
-    SetGPU()
+    SetMainGPU()
     inputManager = require("chugkey")
 
     ClearScreen()
@@ -1295,7 +1300,7 @@ local function main()
     PlaceMeshInScene(1, nil, {0, 0, 7.5}, {0, 0, 0})
     gpu.SetSceneBackground(backgroundColor)
 
-    renderTriangle = RebuildRenderPipeline()
+    RebuildRenderPipeline()
 
     -- Force garbage collection before starting
     for i = 1, 10 do os.sleep(0) end
@@ -1321,7 +1326,7 @@ local function main()
         if doUserControl then inputManager.updateKeypress(inputManager) end
     end
 end
-main()
+if demoProgram then main() end
 
 print("Projected with Chug3D " .. version)
 
@@ -1332,4 +1337,6 @@ return {
     ChangeRenderSetting = ChangeRenderSetting,
     RebuildRenderPipeline = RebuildRenderPipeline,
     RenderScene = RenderScene,
+
+    SetMainGPU = SetMainGPU
 }

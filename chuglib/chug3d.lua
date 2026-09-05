@@ -11,15 +11,8 @@ local _, ops = shell.parse(...)
 local computer = require("computer")
 local version = "0.4.2a"
 
--- Graphics Library
-local gpu = require("chugraph")
-gpu.SetMainGPU(component.gpu, "doubleHeight", true, true)
-
--- BMP Loader
-local bmp = require("chugbmp")
-
--- Input manager
-local inputManager = require("chugkey")
+-- Libraries
+local gpu, bmp, inputManager
 
 -- ============================================================
 -- RENDER CONFIGS
@@ -75,11 +68,8 @@ local cos, sin, tan = math.cos, math.sin, math.tan
 local min, max, abs = math.min, math.max, math.abs
 local GetCPUTime = os.clock
 
-local ClearScreen, UpdateScreen = gpu.ClearScreen, gpu.UpdateScreen
-local SetText, SetPixel = gpu.SetText, gpu.SetPixel
-local DrawTriangle = gpu.DrawTriangle
-local GetGreyscaleColor, GetShadedColor, BlendColor = gpu.GetGreyscaleColor, gpu.GetShadedColor, gpu.BlendColor
-local ColorFromRGB1, ColorFromRGB8 = gpu.ClosestValidHexFromRGB1, gpu.ClosestValidHexFromRGB8
+local ClearScreen, UpdateScreen, SetText, SetPixel, DrawTriangle
+local GetGreyscaleColor, GetShadedColor, BlendColor, ColorFromRGB1, ColorFromRGB8
 
 local TInsert = table.insert; local TRemove = table.remove
 local StringPack, StringUnpack, StringFormat = string.pack, string.unpack, string.format
@@ -580,6 +570,9 @@ local function LoadSceneMeshes(meshFilenames)
     vsBottomDP = vDotProduct({0, screenHeight, 0}, {0, -1, 0})
     nearDP = vDotProduct(nearPlane, nearNormal)
     local maximumVert = 0
+
+    -- Get bmp loader
+    bmp = require("chugbmp")
 
     -- From input mesh filenames, parse .objs and load them into loadedMeshes
     for i = 1, #meshFilenames do
@@ -1266,6 +1259,24 @@ end
     -- Things to figure out:
         -- How can we refer to a specific mesh in the scene?
 
+-- This is perhaps lazy but we need a reference to chugraph for things to work,
+-- And also a reference to chugraph if another library wants to use chug3d
+local function SetGPU(g)
+    if g == nil then
+        gpu = require("chugraph")
+        gpu.SetMainGPU(component.gpu, "doubleHeight", true, true)
+        ClearScreen, UpdateScreen = gpu.ClearScreen, gpu.UpdateScreen
+        SetText, SetPixel, DrawTriangle = gpu.SetText, gpu.SetPixel, gpu.DrawTriangle
+        GetGreyscaleColor, GetShadedColor, BlendColor = gpu.GetGreyscaleColor, gpu.GetShadedColor, gpu.BlendColor
+        ColorFromRGB1, ColorFromRGB8 = gpu.ClosestValidHexFromRGB1, gpu.ClosestValidHexFromRGB8
+    else
+        ClearScreen, UpdateScreen = g.ClearScreen, g.UpdateScreen
+        SetText, SetPixel, DrawTriangle = g.SetText, g.SetPixel, g.DrawTriangle
+        GetGreyscaleColor, GetShadedColor, BlendColor = g.GetGreyscaleColor, g.GetShadedColor, g.BlendColor
+        ColorFromRGB1, ColorFromRGB8 = g.ClosestValidHexFromRGB1, g.ClosestValidHexFromRGB8
+    end
+end
+
 local function RenderScene()
     resetDepthBuffer()
     local viewMat = getViewMatrix()
@@ -1275,6 +1286,10 @@ local function RenderScene()
 end
 
 local function main()
+
+    SetGPU()
+    inputManager = require("chugkey")
+
     ClearScreen()
     LoadSceneMeshes({modelFile})
     PlaceMeshInScene(1, nil, {0, 0, 7.5}, {0, 0, 0})

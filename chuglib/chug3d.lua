@@ -1249,18 +1249,17 @@ end
 
 -- TODO: Packaging Refactor
 -- This needs to be usable from other scripts:
-    -- Move chugraph instance to main()
-    -- main() should only activate if some argument is passed
     -- New script to demo 3d graphics in the same way as chug3d does now, with arguments and such
-    -- Should work with the above instancing refactor
-    -- Most of the functions in chug3d are helpers, and do not need to be accessible outside of the script
-    -- renderScene() becomes RenderScene(), and handles rendering triangles
-        -- Remove ClearScreen() from RenderScene()
     -- Things to move:
         -- DepthBuffer should be moved to chugraph for future shader functionality
         -- SetPixelXYZ would be an example of a SetPixel that respects and sets the DepthBuffer in chugraph
     -- Things to figure out:
         -- How can we refer to a specific mesh in the scene?
+            -- Return a reference upon spawning mesh in scene
+    -- Need to package camera and its variables
+        -- vCamera, vLookDir, fYaw, fPitch could all be put into one table
+        -- sceneCamera.Translate() <- Translate camera in some direction by some amount
+        -- sceneCamera.Rotate() <- Rotate camera on some axis by some amount
 
 -- This is perhaps lazy but we need a reference to chugraph for things to work,
 -- And also a reference to chugraph if another library wants to use chug3d

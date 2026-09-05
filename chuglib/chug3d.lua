@@ -47,7 +47,6 @@ local fFar = 1000                       -- Far plane distance
 local fFov = 90                         -- Field of view
 local modelFile = "teapot.obj"          -- Default loaded model, pretty much just for debugging
 
--- TODO: This is getting quite lengthy, it would be nice to read more complex settings from a setup file
 local function setUserOptions()
     -- load model from input filename
     if ops.model ~= nil then
@@ -566,7 +565,7 @@ local vsLeftDP, vsRightDP, vsTopDP, vsBottomDP, nearDP
 local pVert, vsVert = {}, {}
 
 -- Load mesh from file and prepare it for rendering
-local function loadSceneMeshes(meshFilenames)
+local function LoadSceneMeshes(meshFilenames)
 
     -- Precalculate some commonly used variables
     nLightDir = vNormalize(lightDirection)
@@ -614,15 +613,15 @@ local function loadSceneMeshes(meshFilenames)
         if maximumVert < loadedMeshes[i].vertCount then maximumVert = loadedMeshes[i].vertCount end
     end
 
-    -- TODO: For objects to be placed in scene, place them into sceneMeshes:
-    sceneMeshes[1] = {mesh = 1, parent = nil, children = {}, position = {0, 0, 7.5}, rotation = {0, 0, 0}}
-    -- sceneMeshes[2] = {mesh = 1, parent = nil, children = {}, position = {0, 3, 3}, rotation = {0, 0.9, 0}}
-    -- sceneMeshes[3] = {mesh = 1, parent = nil, children = {}, position = {0, 6, 3}, rotation = {0, -20, 0}}
-
     -- Setup pVert and vsVert
     for i = 1, maximumVert do
         pVert[i], vsVert[i] = {0, 0, 0, 1}, {0, 0, 0, 1}
     end
+
+end
+
+local function PlaceMeshInScene(meshIndex, parent, position, rotation)
+    sceneMeshes[1] = {mesh = meshIndex, parent = parent, children = {}, position = position, rotation = rotation}
 end
 
 -- ============================================================
@@ -672,7 +671,7 @@ local function uvSampleTexture(u, v, texIndex)
 end
 
 -- Return function to be used as each pixel's rendering "pipeline"
-local function buildRenderPipeline()
+local function RebuildRenderPipeline()
 
     -- Draw depth value at each pixel
     if drawDepthBuffer then
@@ -719,7 +718,7 @@ local function buildRenderPipeline()
 end
 
 -- Change setting during runtime
-local function changeSetting(setting, value)
+local function ChangeRenderSetting(setting, value)
     if setting == "draw-texture" then
         doDrawTextured = value
     elseif setting == "draw-normal-color" then
@@ -741,7 +740,7 @@ local function changeSetting(setting, value)
     end
 
     -- Update render pipeline
-    buildRenderPipeline()
+    RebuildRenderPipeline()
 end
 
 -- ============================================================
@@ -1235,7 +1234,7 @@ local function applyInputControls()
     end
     if keyCooldown == 0 then
         if inputManager.isKeyDown(inputManager, KEY_WIREFRAME) then
-            changeSetting("draw-wireframe", not drawWireFrame)
+            ChangeRenderSetting("draw-wireframe", not drawWireFrame)
             keyCooldown = 10
         end
     end
@@ -1267,10 +1266,8 @@ end
     -- Things to figure out:
         -- How can we refer to a specific mesh in the scene?
 
-local function renderScene()
-    ClearScreen()
+local function RenderScene()
     resetDepthBuffer()
-
     local viewMat = getViewMatrix()
     for i = 1, #sceneMeshes do
         drawSceneMesh(viewMat, sceneMeshes[i])
@@ -1279,10 +1276,11 @@ end
 
 local function main()
     ClearScreen()
-    loadSceneMeshes({modelFile})
+    LoadSceneMeshes({modelFile})
+    PlaceMeshInScene(1, nil, {0, 0, 7.5}, {0, 0, 0})
     gpu.SetSceneBackground(backgroundColor)
 
-    renderTriangle = buildRenderPipeline()
+    renderTriangle = RebuildRenderPipeline()
 
     -- Force garbage collection before starting
     for i = 1, 10 do os.sleep(0) end
@@ -1299,7 +1297,8 @@ local function main()
             break
         end
 
-        renderScene()
+        ClearScreen()
+        RenderScene()
         modelDebug()
         UpdateScreen()
 
@@ -1310,3 +1309,12 @@ end
 main()
 
 print("Projected with Chug3D " .. version)
+
+return {
+    LoadSceneMeshes = LoadSceneMeshes,
+    PlaceMeshInScene = PlaceMeshInScene,
+
+    ChangeRenderSetting = ChangeRenderSetting,
+    RebuildRenderPipeline = RebuildRenderPipeline,
+    RenderScene = RenderScene,
+}
